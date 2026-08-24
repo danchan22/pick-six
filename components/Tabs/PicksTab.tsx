@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
+import { getTeamNickname, getTeamLogoUrl, getTeamAbbr } from '@/lib/nflTeams';
 
 interface Game {
   id: string;
@@ -11,6 +11,7 @@ interface Game {
   away_team: string;
   kickoff_time: string;
   status: string;
+  winner_team: string | null;
 }
 
 interface Pick {
@@ -18,6 +19,8 @@ interface Pick {
   game_id: string;
   selected_team: string;
   is_lock: boolean;
+  points_awarded?: number;
+  games?: Game;
 }
 
 export default function PicksTab({ userId, currentWeek: initialWeek }: { userId: string; currentWeek: number }) {
@@ -45,7 +48,7 @@ export default function PicksTab({ userId, currentWeek: initialWeek }: { userId:
   const fetchUserPicks = async () => {
     const { data } = await supabase
       .from('picks')
-      .select('*')
+      .select('*, games(*)')
       .eq('user_id', userId)
       .eq('week', selectedWeek);
     setPicks(data || []);
@@ -64,17 +67,21 @@ export default function PicksTab({ userId, currentWeek: initialWeek }: { userId:
     setTeamPickCounts(counts);
   };
 
+  // Toggle or Undo Pick Logic
   const handleSelectTeam = async (gameId: string, team: string) => {
     const existingPick = picks.find((p) => p.game_id === gameId);
 
     if (existingPick?.selected_team === team) {
+      // Undo/Clear Pick when tapped again
       await supabase.from('picks').delete().eq('id', existingPick.id);
     } else if (existingPick) {
+      // Switch Pick to other team
       await supabase
         .from('picks')
         .update({ selected_team: team })
         .eq('id', existingPick.id);
     } else {
+      // New Pick (Max 6 limit)
       if (picks.length >= 6) return;
       await supabase.from('picks').insert({
         user_id: userId,
@@ -115,12 +122,11 @@ export default function PicksTab({ userId, currentWeek: initialWeek }: { userId:
     return new Date() >= new Date(kickoffTime);
   };
 
-  // Top 6 Picks Slot Display
   const pickSlots = Array.from({ length: 6 }, (_, index) => picks[index] || null);
 
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
-      {/* Week Navigation + Dev Testing Switch */}
+      {/* Week Navigation Header */}
       <div className="flex justify-between items-center bg-gray-900 p-3 rounded-xl border border-gray-800">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-gray-400">Week:</span>
@@ -139,48 +145,74 @@ export default function PicksTab({ userId, currentWeek: initialWeek }: { userId:
 
         <button
           onClick={() => setForceUnlockForTesting(!forceUnlockForTesting)}
-          className={`text-[10px] font-bold px-2.5 py-1 rounded border ${
+          className={`text-[10px] font-bold px-2 py-1 rounded border ${
             forceUnlockForTesting
               ? 'bg-amber-950 text-amber-300 border-amber-500'
               : 'bg-gray-800 text-gray-400 border-gray-700'
           }`}
         >
-          {forceUnlockForTesting ? '🧪 Dev Unlock Active' : 'Test Locks'}
+          {forceUnlockForTesting ? '🧪 Dev Unlocked' : 'Test Locks'}
         </button>
       </div>
 
-      {/* Top 6 Pick Logos Row */}
+      {/* Top 6 Pick Logos Row with White Background & Opponents */}
       <div className="bg-gray-900 border border-gray-800 p-3 rounded-xl flex justify-between items-center gap-1">
-        {pickSlots.map((pick, i) => (
-          <div
-            key={i}
-            className={`flex-1 aspect-square max-w-[56px] rounded-lg border flex flex-col items-center justify-center p-1 relative ${
-              pick
-                ? pick.is_lock
-                  ? 'border-amber-400 bg-amber-500/10'
-                  : 'border-emerald-500 bg-emerald-500/10'
-                : 'border-dashed border-gray-700 bg-gray-950/40'
-            }`}
-          >
-            {pick ? (
-              <>
-                <img
-                  src={getTeamLogoUrl(pick.selected_team)}
-                  alt={pick.selected_team}
-                  className="w-7 h-7 object-contain"
-                />
-                {pick.is_lock && (
-                  <span className="absolute -top-1 -right-1 text-[10px]">🔒</span>
-                )}
-              </>
-            ) : (
-              <span className="text-gray-500 font-bold text-xs">?</span>
-            )}
-          </div>
-        ))}
+        {pickSlots.map((pick, i) => {
+          let game = games.find((g) => g.id === pick?.game_id) || pick?.games;
+          let isHome = game?.home_team === pick?.selected_team;
+          let opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
+          let oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
+          let oppPrefix = isHome ? 'vs' : '@';
+
+          // Scoring status colors
+          let statusBg = 'bg-blue-500/20 border-blue-500'; // Pre-game selected
+          if (game?.status === 'post') {
+            if (pick?.selected_team === game.winner_team) statusBg = 'bg-emerald-500/25 border-emerald-500'; // Win
+            else if (game.winner_team === 'TIE') statusBg = 'bg-amber-500/25 border-amber-500'; // Tie
+            else statusBg = 'bg-red-500/25 border-red-500'; // Loss
+          }
+
+          return (
+            <div
+              key={i}
+              className={`flex-1 aspect-square max-w-[56px] rounded-lg border flex flex-col items-center justify-between p-1 relative shadow-sm ${
+                pick
+                  ? `bg-white ${statusBg} ${pick.is_lock ? 'ring-2 ring-amber-400' : ''}`
+                  : 'bg-white/90 border-dashed border-gray-400'
+              }`}
+            >
+              {pick ? (
+                <>
+                  <div className="w-full flex justify-between items-center px-0.5">
+                    {pick.is_lock && <span className="text-[9px]">🔒</span>}
+                  </div>
+
+                  <img
+                    src={getTeamLogoUrl(pick.selected_team)}
+                    alt={pick.selected_team}
+                    className="w-6 h-6 object-contain"
+                  />
+
+                  <span className="text-[9px] font-extrabold text-gray-800 font-mono tracking-tighter">
+                    {oppPrefix} {oppAbbr}
+                  </span>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 font-bold text-xs">
+                  ?
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Games List */}
+      {/* Timezone Note */}
+      <div className="text-[11px] font-semibold text-gray-400 text-right px-1">
+        All Times Eastern
+      </div>
+
+      {/* Game Cards List */}
       <div className="flex flex-col gap-3">
         {games.map((game) => {
           const locked = isGameLocked(game.kickoff_time);
@@ -201,29 +233,39 @@ export default function PicksTab({ userId, currentWeek: initialWeek }: { userId:
                     minute: '2-digit',
                   })}
                 </span>
-                {locked && <span className="text-red-400 font-bold">🔒 LOCKED</span>}
+                {locked && <span className="text-red-400 font-bold">🔒</span>}
               </div>
 
               {/* Matchup Teams */}
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { full: game.away_team, nick: awayNickname },
-                  { full: game.home_team, nick: homeNickname },
+                  { full: game.away_team, nick: awayNickname, prefix: '@' },
+                  { full: game.home_team, nick: homeNickname, prefix: 'vs' },
                 ].map((team) => {
                   const isSelected = currentPick?.selected_team === team.full;
                   const count = teamPickCounts[team.full] || 0;
                   const disabled = locked || (count >= 6 && !isSelected);
+
+                  // Button Status Coloring
+                  let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
+                  if (isSelected) {
+                    if (game.status === 'post') {
+                      if (team.full === game.winner_team) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
+                      else if (game.winner_team === 'TIE') btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
+                      else btnColor = 'bg-red-600/30 border-red-500 text-white font-bold';
+                    } else {
+                      btnColor = 'bg-blue-600/30 border-blue-500 text-white font-bold';
+                    }
+                  }
 
                   return (
                     <button
                       key={team.full}
                       disabled={disabled}
                       onClick={() => handleSelectTeam(game.id, team.full)}
-                      className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${
-                        isSelected
-                          ? 'bg-emerald-600/20 border-emerald-500 text-white font-bold'
-                          : 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500'
-                      } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                      className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${btnColor} ${
+                        disabled ? 'opacity-40 cursor-not-allowed' : ''
+                      }`}
                     >
                       <div className="flex items-center gap-2">
                         <img
@@ -250,7 +292,7 @@ export default function PicksTab({ userId, currentWeek: initialWeek }: { userId:
                       : 'bg-gray-800 text-gray-400 border-gray-700 hover:text-white'
                   }`}
                 >
-                  {currentPick.is_lock ? '🔒 Lock of the Week' : 'Set as Lock'}
+                  {currentPick.is_lock ? '🔒 Lock of the Week' : 'Set as Lock of the Week'}
                 </button>
               )}
             </div>
