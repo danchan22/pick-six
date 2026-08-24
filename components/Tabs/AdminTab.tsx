@@ -66,10 +66,15 @@ export default function AdminTab() {
     setLoading(true);
     setMessage(null);
     try {
+      const currentYear = new Date().getFullYear();
+      let totalImported = 0;
+
       for (let w = 1; w <= 18; w++) {
         setSyncProgress(`Fetching Week ${w} of 18 from ESPN...`);
+        
+        // Pass explicit season dates & year to force ESPN to return full calendar
         const res = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2&week=${w}`
+          `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${currentYear}&seasontype=2&week=${w}`
         );
         const data = await res.json();
         const events = data.events || [];
@@ -90,7 +95,7 @@ export default function AdminTab() {
 
             return {
               id: event.id,
-              season_year: data.season?.year || 2026,
+              season_year: data.season?.year || currentYear,
               week: w,
               home_team: home.team.displayName,
               away_team: away.team.displayName,
@@ -104,9 +109,10 @@ export default function AdminTab() {
           });
 
           await supabase.from('games').upsert(gamesToUpsert, { onConflict: 'id' });
+          totalImported += gamesToUpsert.length;
         }
       }
-      setMessage({ type: 'success', text: 'All 18 NFL weeks synced successfully!' });
+      setMessage({ type: 'success', text: `Successfully imported ${totalImported} games across all 18 weeks!` });
       fetchWeekGames();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
