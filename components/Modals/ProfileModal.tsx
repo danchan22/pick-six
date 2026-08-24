@@ -16,30 +16,32 @@ export default function ProfileModal({
   userId,
   onProfileUpdated,
 }: ProfileModalProps) {
+  const [activeTab, setActiveTab] = useState<'profile' | 'history'>('profile');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [teamName, setTeamName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null
-  );
+  const [userPicks, setUserPicks] = useState<any[]>([]);
+  const [selectedWeekHistory, setSelectedWeekHistory] = useState<number>(1);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (isOpen && userId) {
       loadUserProfile();
+      loadPickHistory();
     }
-  }, [isOpen, userId]);
+  }, [isOpen, userId, selectedWeekHistory]);
 
   const loadUserProfile = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('first_name, last_name, team_name, avatar_url')
       .eq('id', userId)
       .single();
 
-    if (data && !error) {
+    if (data) {
       setFirstName(data.first_name || '');
       setLastName(data.last_name || '');
       setTeamName(data.team_name || '');
@@ -47,45 +49,44 @@ export default function ProfileModal({
     }
   };
 
-  // Upload Avatar Image to Supabase Storage Bucket ('avatars')
+  const loadPickHistory = async () => {
+    const { data } = await supabase
+      .from('picks')
+      .select('*, games(*)')
+      .eq('user_id', userId)
+      .eq('week', selectedWeekHistory);
+
+    setUserPicks(data || []);
+  };
+
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploading(true);
-      setMessage(null);
-
-      if (!event.target.files || event.target.files.length === 0) {
-        throw new Error('Please select an image to upload.');
-      }
+      if (!event.target.files || event.target.files.length === 0) return;
 
       const file = event.target.files[0];
       const fileExt = file.name.split('.').pop();
       const filePath = `${userId}/${Math.random()}.${fileExt}`;
 
-      // Upload file to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get Public URL for uploaded image
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
       setAvatarUrl(data.publicUrl);
-      setMessage({ type: 'success', text: 'Image uploaded! Click Save to apply changes.' });
+      setMessage({ type: 'success', text: 'Image uploaded!' });
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Error uploading image.' });
+      setMessage({ type: 'error', text: error.message });
     } finally {
       setUploading(false);
     }
   };
 
-  // Save Profile Details
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setMessage(null);
-
     try {
       const { error } = await supabase
         .from('profiles')
@@ -98,14 +99,10 @@ export default function ProfileModal({
         .eq('id', userId);
 
       if (error) throw error;
-
-      setMessage({ type: 'success', text: 'Profile updated successfully!' });
+      setMessage({ type: 'success', text: 'Profile updated!' });
       onProfileUpdated();
-      setTimeout(() => {
-        onClose();
-      }, 1200);
     } catch (error: any) {
-      setMessage({ type: 'error', text: error.message || 'Failed to update profile.' });
+      setMessage({ type: 'error', text: error.message });
     } finally {
       setSaving(false);
     }
@@ -113,10 +110,11 @@ export default function ProfileModal({
 
   if (!isOpen) return null;
 
+  const initials = `${firstName.slice(0, 1)}${lastName.slice(0, 1)}`.toUpperCase() || 'PS';
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative">
-        {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-white text-lg font-bold"
@@ -124,102 +122,130 @@ export default function ProfileModal({
           ✕
         </button>
 
-        <h2 className="text-xl font-bold text-white text-center mb-1">Edit Team Profile</h2>
-        <p className="text-xs text-gray-400 text-center mb-6">
-          Update your avatar and team branding
-        </p>
-
-        {/* Success/Error Feedback */}
-        {message && (
-          <div
-            className={`p-3 rounded-lg text-xs mb-4 border ${
-              message.type === 'success'
-                ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
-                : 'bg-red-950/80 border-red-500/50 text-red-200'
+        {/* Sub Navigation */}
+        <div className="flex gap-2 mb-4 border-b border-gray-800 pb-2">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`text-xs font-bold px-3 py-1 rounded-lg ${
+              activeTab === 'profile' ? 'bg-emerald-600 text-white' : 'text-gray-400'
             }`}
           >
+            Profile Info
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`text-xs font-bold px-3 py-1 rounded-lg ${
+              activeTab === 'history' ? 'bg-emerald-600 text-white' : 'text-gray-400'
+            }`}
+          >
+            Pick History
+          </button>
+        </div>
+
+        {message && (
+          <div className="p-2 rounded text-xs mb-3 bg-emerald-950 text-emerald-200 border border-emerald-500/50">
             {message.text}
           </div>
         )}
 
-        <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
-          {/* Avatar Preview & Upload Button */}
-          <div className="flex flex-col items-center gap-3">
-            <div className="relative w-20 h-20 rounded-full bg-gray-800 border-2 border-emerald-500/60 overflow-hidden flex items-center justify-center shadow-lg">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="Team Avatar" className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xl font-bold text-gray-400">
-                  {teamName ? teamName.slice(0, 2).toUpperCase() : 'PS'}
-                </span>
-              )}
+        {activeTab === 'profile' ? (
+          <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-600 to-indigo-600 border-2 border-emerald-500 flex items-center justify-center overflow-hidden font-bold text-lg text-white">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  initials
+                )}
+              </div>
+              <label className="cursor-pointer text-[11px] text-emerald-400 font-semibold hover:underline">
+                {uploading ? 'Uploading...' : 'Change Profile Picture'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
             </div>
 
-            <label className="cursor-pointer bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg border border-gray-700 transition-colors">
-              {uploading ? 'Uploading...' : 'Upload Team Picture'}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleAvatarUpload}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          {/* Form Fields */}
-          <div className="flex flex-col gap-3">
             <div>
-              <label className="text-[11px] font-semibold text-gray-400 mb-1 block">
-                Team Name
-              </label>
+              <label className="text-[11px] text-gray-400 block mb-1">Team Name</label>
               <input
                 type="text"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
                 required
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[11px] font-semibold text-gray-400 mb-1 block">
-                  First Name
-                </label>
+                <label className="text-[11px] text-gray-400 block mb-1">First Name</label>
                 <input
                   type="text"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
                 />
               </div>
-
               <div>
-                <label className="text-[11px] font-semibold text-gray-400 mb-1 block">
-                  Last Name
-                </label>
+                <label className="text-[11px] text-gray-400 block mb-1">Last Name</label>
                 <input
                   type="text"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
                 />
               </div>
             </div>
-          </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={saving || uploading}
-            className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-sm transition-colors shadow-lg shadow-emerald-950"
-          >
-            {saving ? 'Saving...' : 'Save Profile Changes'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-sm mt-2"
+            >
+              {saving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </form>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-300">Select Week</span>
+              <select
+                value={selectedWeekHistory}
+                onChange={(e) => setSelectedWeekHistory(Number(e.target.value))}
+                className="bg-gray-800 text-xs text-white p-1 rounded border border-gray-700"
+              >
+                {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                  <option key={w} value={w}>
+                    Week {w}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+              {userPicks.length === 0 ? (
+                <p className="text-xs text-gray-500 text-center py-4">No picks for Week {selectedWeekHistory}</p>
+              ) : (
+                userPicks.map((pick) => (
+                  <div key={pick.id} className="bg-gray-800/80 p-2.5 rounded-lg flex justify-between items-center text-xs">
+                    <div>
+                      <span className="font-bold text-white">{pick.selected_team}</span>
+                      {pick.is_lock && <span className="ml-2 text-[10px] text-amber-400 font-bold">🔒 LOCK</span>}
+                    </div>
+                    <span className="font-mono font-bold text-emerald-400">+{pick.points_awarded || 0} pts</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
