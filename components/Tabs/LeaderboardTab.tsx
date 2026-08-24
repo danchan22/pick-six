@@ -24,12 +24,13 @@ export default function LeaderboardTab() {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
       const totalPoints = userPicks.reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
       const wins = userPicks.filter((pick) => (pick.points_awarded || 0) > 0).length;
+      const losses = userPicks.filter((pick) => (pick.points_awarded || 0) < 0 || (pick.points_awarded === 0 && pick.game_id)).length;
 
       return {
         ...p,
         totalPoints,
-        totalPicks: userPicks.length,
         wins,
+        losses,
       };
     });
 
@@ -39,9 +40,7 @@ export default function LeaderboardTab() {
 
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <h2 className="text-xl font-bold flex items-center gap-2">
-        🏆 Standings
-      </h2>
+      <h2 className="text-xl font-bold flex items-center gap-2">🏆 Standings</h2>
 
       <div className="flex flex-col gap-2">
         {standings.map((user, index) => {
@@ -53,7 +52,7 @@ export default function LeaderboardTab() {
               key={user.id}
               className={`p-3 rounded-xl border flex items-center justify-between transition-all ${
                 isCurrentUser
-                  ? 'bg-emerald-950/60 border-emerald-500 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500'
+                  ? 'bg-emerald-950/60 border-emerald-500 shadow-lg ring-1 ring-emerald-500'
                   : 'bg-gray-900 border-gray-800'
               }`}
             >
@@ -87,9 +86,11 @@ export default function LeaderboardTab() {
 
               <div className="text-right">
                 <span className="font-extrabold text-base text-emerald-400 font-mono">
-                  {user.totalPoints} pts
+                  {user.totalPoints} {user.totalPoints === 1 ? 'pt' : 'pts'}
                 </span>
-                <p className="text-[10px] text-gray-400">{user.wins} Wins</p>
+                <p className="text-[10px] text-gray-400 font-mono">
+                  {user.wins}-{user.losses}
+                </p>
               </div>
             </div>
           );
