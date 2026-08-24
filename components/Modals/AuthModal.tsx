@@ -15,7 +15,6 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
   const [inviteCode, setInviteCode] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,14 +38,17 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
           throw new Error('Invalid or inactive invite code.');
         }
 
+        // Default team name to "Team [FIRST_NAME]"
+        const defaultTeamName = `Team ${firstName.trim()}`;
+
         const { error: signUpErr } = await supabase.auth.signUp({
           email,
           password,
           options: {
             data: {
-              first_name: firstName,
-              last_name: lastName,
-              team_name: teamName,
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+              team_name: defaultTeamName,
             },
           },
         });
@@ -115,14 +117,6 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
                   className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
                 />
               </div>
-              <input
-                type="text"
-                placeholder="Team Name"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                required
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
-              />
             </>
           )}
 
@@ -148,7 +142,7 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
             disabled={loading}
             className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-sm transition-colors shadow-lg shadow-emerald-950"
           >
-            {loading ? 'Processing...' : isSignUp ? 'Register Team' : 'Sign In'}
+            {loading ? 'Processing...' : isSignUp ? 'Register' : 'Sign In'}
           </button>
         </form>
 
