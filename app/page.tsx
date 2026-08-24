@@ -4,21 +4,24 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import PicksTab from '@/components/Tabs/PicksTab';
 import LeaderboardTab from '@/components/Tabs/LeaderboardTab';
-import RulesTab from '@/components/Tabs/RulesTab'; // <-- Added Import
+import RulesTab from '@/components/Tabs/RulesTab';
+import AdminTab from '@/components/Tabs/AdminTab'; // <-- Import AdminTab
 import PickAlertBanner from '@/components/Shared/PickAlertBanner';
 import AuthModal from '@/components/Modals/AuthModal';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'rules'>('picks'); // <-- Updated State
+  const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'rules' | 'admin'>('picks');
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [userPicksCount, setUserPicksCount] = useState(0);
   const [hasLock, setHasLock] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false); // <-- Admin state
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
+      if (session?.user) checkAdminStatus(session.user.id);
       setLoading(false);
     });
 
@@ -26,6 +29,8 @@ export default function Home() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      if (session?.user) checkAdminStatus(session.user.id);
+      else setIsAdmin(false);
     });
 
     fetchCurrentWeek();
@@ -33,11 +38,17 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (session?.user) {
-      checkUserPicksStatus();
+  const checkAdminStatus = async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', userId)
+      .single();
+
+    if (data?.is_admin) {
+      setIsAdmin(true);
     }
-  }, [session, currentWeek]);
+  };
 
   const fetchCurrentWeek = async () => {
     const { data } = await supabase
@@ -75,7 +86,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
-      {/* Top Header */}
+      {/* Header */}
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -96,8 +107,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Alert Banner if picks are missing */}
-      {session && activeTab !== 'rules' && (
+      {/* Alert Banner */}
+      {session && activeTab !== 'rules' && activeTab !== 'admin' && (
         <PickAlertBanner
           currentWeek={currentWeek}
           picksCount={userPicksCount}
@@ -106,15 +117,17 @@ export default function Home() {
         />
       )}
 
-      {/* Dynamic Tab Content */}
+      {/* Main Content */}
       <div className="flex-1">
         {session ? (
           activeTab === 'picks' ? (
             <PicksTab userId={session.user.id} currentWeek={currentWeek} />
           ) : activeTab === 'leaderboard' ? (
             <LeaderboardTab />
+          ) : activeTab === 'rules' ? (
+            <RulesTab />
           ) : (
-            <RulesTab /> // <-- Added View Rendering
+            <AdminTab />
           )
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
@@ -126,10 +139,9 @@ export default function Home() {
         )}
       </div>
 
-      {/* Authentication Modal */}
       <AuthModal isOpen={!session} onSuccess={() => checkUserPicksStatus()} />
 
-      {/* Mobile-Optimized Bottom Navigation */}
+      {/* Bottom Navigation */}
       {session && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-6 py-2">
           <div className="max-w-md mx-auto flex items-center justify-around">
@@ -153,7 +165,6 @@ export default function Home() {
               <span className="text-[11px]">Standings</span>
             </button>
 
-            {/* Added Navigation Item */}
             <button
               onClick={() => setActiveTab('rules')}
               className={`flex flex-col items-center gap-1 transition-colors ${
@@ -163,6 +174,19 @@ export default function Home() {
               <span className="text-lg">📖</span>
               <span className="text-[11px]">Rules</span>
             </button>
+
+            {/* Render Admin Button if user is Admin */}
+            {isAdmin && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`flex flex-col items-center gap-1 transition-colors ${
+                  activeTab === 'admin' ? 'text-emerald-400 font-bold' : 'text-gray-500 hover:text-gray-300'
+                }`}
+              >
+                <span className="text-lg">🛠️</span>
+                <span className="text-[11px]">Admin</span>
+              </button>
+            )}
           </div>
         </nav>
       )}
