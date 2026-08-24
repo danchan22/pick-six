@@ -13,30 +13,27 @@ export default function PickAlertBanner({
   hasLock,
   onNavigateToPicks,
 }: PickAlertBannerProps) {
-  // Hide banner if user has submitted all 6 picks and selected a Lock
-  if (picksCount === 6 && hasLock) return null;
+  const isComplete = picksCount === 6 && hasLock;
+
+  if (isComplete) return null;
 
   return (
-    <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-3">
-      <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="text-lg shrink-0">⚠️</span>
-          <div className="text-xs text-amber-200 min-w-0">
-            <p className="font-bold truncate">Week {currentWeek} Picks Incomplete</p>
-            <p className="text-amber-300/80 text-[11px] truncate">
-              {picksCount < 6
-                ? `${6 - picksCount} more game pick${6 - picksCount > 1 ? 's' : ''} needed`
-                : 'Select your Lock of the Week'}
+    <div
+      onClick={onNavigateToPicks}
+      className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 cursor-pointer hover:bg-amber-500/15 transition-colors"
+    >
+      <div className="max-w-2xl mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-amber-400 text-base">⚠️</span>
+          <div>
+            <p className="text-xs font-bold text-amber-200">
+              Week {currentWeek} Picks Incomplete
+            </p>
+            <p className="text-[11px] text-amber-400/80 font-medium">
+              Make your picks now!
             </p>
           </div>
         </div>
-
-        <button
-          onClick={onNavigateToPicks}
-          className="bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 transition-colors shadow-sm"
-        >
-          Make Picks
-        </button>
       </div>
     </div>
   );
