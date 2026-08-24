@@ -17,20 +17,30 @@ export default function PickAlertBanner({
 
   if (isComplete) return null;
 
+  const missingLockOnly = picksCount === 6 && !hasLock;
+
   return (
     <div
       onClick={onNavigateToPicks}
-      className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-2.5 cursor-pointer hover:bg-amber-500/15 transition-colors"
+      className={`border-b px-4 py-2.5 cursor-pointer transition-colors ${
+        missingLockOnly
+          ? 'bg-amber-500/20 border-amber-500/50 hover:bg-amber-500/30'
+          : 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20'
+      }`}
     >
       <div className="max-w-2xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-amber-400 text-base">⚠️</span>
+          <span className="text-base">{missingLockOnly ? '🔒' : '⚠️'}</span>
           <div>
-            <p className="text-xs font-bold text-amber-200">
-              Week {currentWeek} Picks Incomplete
+            <p className="text-xs font-bold text-white">
+              {missingLockOnly
+                ? `Week ${currentWeek}: Lock of the Week Required!`
+                : `Week ${currentWeek} Picks Incomplete (${picksCount}/6)`}
             </p>
-            <p className="text-[11px] text-amber-400/80 font-medium">
-              Make your picks now!
+            <p className="text-[11px] text-gray-300">
+              {missingLockOnly
+                ? 'You picked 6 teams but have not set your Lock!'
+                : 'Make your picks now!'}
             </p>
           </div>
         </div>
