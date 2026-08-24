@@ -66,53 +66,72 @@ export default function AdminTab() {
     setLoading(true);
     setMessage(null);
     try {
-      const currentYear = new Date().getFullYear();
+      const seasonYear = 2026;
       let totalImported = 0;
 
       for (let w = 1; w <= 18; w++) {
-        setSyncProgress(`Fetching Week ${w} of 18 from ESPN...`);
-        
-        // Pass explicit season dates & year to force ESPN to return full calendar
+        setSyncProgress(`Fetching Week ${w} of 18 from ESPN Core API...`);
+
+        // Use ESPN's Core Schedule Endpoint which returns full regular season weeks
         const res = await fetch(
-          `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${currentYear}&seasontype=2&week=${w}`
+          `https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/${seasonYear}/types/2/weeks/${w}/events`
         );
         const data = await res.json();
-        const events = data.events || [];
+        const eventRefs = data.items || [];
 
-        if (events.length > 0) {
-          const gamesToUpsert = events.map((event: any) => {
-            const competition = event.competitions[0];
-            const home = competition.competitors.find((c: any) => c.homeAway === 'home');
-            const away = competition.competitors.find((c: any) => c.homeAway === 'away');
-            const statusState = event.status.type.state;
+        if (eventRefs.length > 0) {
+          // Fetch detailed event information for each game in the week
+          const gamesToUpsert = await Promise.all(
+            eventRefs.map(async (item: any) => {
+              const eventRes = await fetch(item.$ref);
+              const event = await eventRes.json();
+              const competition = event.competitions[0];
 
-            let winnerTeam = null;
-            if (statusState === 'post') {
-              if (parseInt(home.score) > parseInt(away.score)) winnerTeam = home.team.displayName;
-              else if (parseInt(away.score) > parseInt(home.score)) winnerTeam = away.team.displayName;
-              else winnerTeam = 'TIE';
-            }
+              const home = competition.competitors.find((c: any) => c.homeAway === 'home');
+              const away = competition.competitors.find((c: any) => c.homeAway === 'away');
 
-            return {
-              id: event.id,
-              season_year: data.season?.year || currentYear,
-              week: w,
-              home_team: home.team.displayName,
-              away_team: away.team.displayName,
-              home_score: parseInt(home.score || 0),
-              away_score: parseInt(away.score || 0),
-              kickoff_time: event.date,
-              status: statusState,
-              winner_team: winnerTeam,
-              updated_at: new Date().toISOString(),
-            };
-          });
+              // Fetch team display names
+              const homeTeamRes = await fetch(home.team.$ref);
+              const awayTeamRes = await fetch(away.team.$ref);
+              const homeTeamData = await homeTeamRes.json();
+              const awayTeamData = await awayTeamRes.json();
+
+              const statusState = event.status?.type?.state || 'pre';
+              let winnerTeam = null;
+
+              if (statusState === 'post') {
+                const homeScore = parseInt(home.score?.value || 0);
+                const awayScore = parseInt(away.score?.value || 0);
+                if (homeScore > awayScore) winnerTeam = homeTeamData.displayName;
+                else if (awayScore > homeScore) winnerTeam = awayTeamData.displayName;
+                else winnerTeam = 'TIE';
+              }
+
+              return {
+                id: event.id,
+                season_year: seasonYear,
+                week: w,
+                home_team: homeTeamData.displayName,
+                away_team: awayTeamData.displayName,
+                home_score: parseInt(home.score?.value || 0),
+                away_score: parseInt(away.score?.value || 0),
+                kickoff_time: event.date,
+                status: statusState,
+                winner_team: winnerTeam,
+                updated_at: new Date().toISOString(),
+              };
+            })
+          );
 
           await supabase.from('games').upsert(gamesToUpsert, { onConflict: 'id' });
           totalImported += gamesToUpsert.length;
         }
       }
-      setMessage({ type: 'success', text: `Successfully imported ${totalImported} games across all 18 weeks!` });
+
+      setMessage({
+        type: 'success',
+        text: `Successfully imported ${totalImported} games across all 18 weeks!`,
+      });
       fetchWeekGames();
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
