@@ -3,385 +3,209 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-interface Game {
-  id: string;
-  week: number;
-  home_team: string;
-  away_team: string;
-  home_score: number;
-  away_score: number;
-  status: string;
-  winner_team: string | null;
-}
-
-interface UserProfile {
-  id: string;
-  first_name: string;
-  last_name: string;
-  team_name: string;
-  is_admin: boolean;
-}
-
-interface UserPick {
-  id: string;
-  game_id: string;
-  selected_team: string;
-  is_lock: boolean;
-  points_awarded: number;
-}
-
-interface InviteCode {
-  code: string;
-  is_active: boolean;
-  created_at: string;
-}
-
 export default function AdminTab() {
-  const [activeSubTab, setActiveSubTab] = useState<'games' | 'picks' | 'invites' | 'users'>('games');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'add_picks' | 'invites'>('users');
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const [selectedWeek, setSelectedWeek] = useState<number>(1);
-  const [games, setGames] = useState<Game[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [userPicks, setUserPicks] = useState<UserPick[]>([]);
-  const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
-  const [newCode, setNewCode] = useState<string>('');
-  const [loading, setLoading] = useState<boolean>(false);
+  const [games, setGames] = useState<any[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<string>('');
+  const [selectedGameId, setSelectedGameId] = useState<string>('');
+  const [isLock, setIsLock] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    fetchWeekGames();
     fetchUsers();
-    fetchInviteCodes();
-  }, [selectedWeek]);
+  }, []);
 
   useEffect(() => {
-    if (selectedUserId) {
-      fetchUserPicks(selectedUserId, selectedWeek);
-    }
-  }, [selectedUserId, selectedWeek]);
+    fetchWeekGames();
+  }, [selectedWeek]);
 
-  // 1. Fetch Games for Selected Week
-  const fetchWeekGames = async () => {
-    const { data } = await supabase
-      .from('games')
-      .select('*')
-      .eq('week', selectedWeek)
-      .order('kickoff_time', { ascending: true });
-    setGames(data || []);
-  };
-
-  // 2. Fetch League Users
   const fetchUsers = async () => {
-    const { data } = await supabase.from('profiles').select('*').order('team_name', { ascending: true });
+    const { data } = await supabase.from('profiles').select('*');
     setUsers(data || []);
   };
 
-  // 3. Fetch Invites
-  const fetchInviteCodes = async () => {
-    const { data } = await supabase.from('invite_codes').select('*').order('created_at', { ascending: false });
-    setInviteCodes(data || []);
+  const fetchWeekGames = async () => {
+    const { data } = await supabase.from('games').select('*').eq('week', selectedWeek);
+    setGames(data || []);
   };
 
-  // 4. Fetch Picks for User Adjustment
-  const fetchUserPicks = async (userId: string, week: number) => {
-    const { data } = await supabase
-      .from('picks')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('week', week);
-    setUserPicks(data || []);
-  };
-
-  // Admin Action: Manual Score / Winner Override
-  const handleUpdateGameScore = async (gameId: string, homeScore: number, awayScore: number, status: string, winner: string | null) => {
-    setLoading(true);
-    setMessage(null);
-
+  const handleUpdateUserProfile = async (userId: string, teamName: string, firstName: string, lastName: string) => {
     const { error } = await supabase
-      .from('games')
-      .update({
-        home_score: homeScore,
-        away_score: awayScore,
-        status: status,
-        winner_team: winner,
-      })
-      .eq('id', gameId);
+      .from('profiles')
+      .update({ team_name: teamName, first_name: firstName, last_name: lastName })
+      .eq('id', userId);
 
-    if (error) {
-      setMessage({ type: 'error', text: 'Failed to update game: ' + error.message });
-    } else {
-      setMessage({ type: 'success', text: 'Game updated successfully!' });
-      fetchWeekGames();
-    }
-    setLoading(false);
-  };
-
-  // Admin Action: Override User Pick
-  const handleUpdateUserPick = async (pickId: string, newTeam: string, isLock: boolean, points: number) => {
-    setLoading(true);
-    setMessage(null);
-
-    const { error } = await supabase
-      .from('picks')
-      .update({
-        selected_team: newTeam,
-        is_lock: isLock,
-        points_awarded: points,
-      })
-      .eq('id', pickId);
-
-    if (error) {
-      setMessage({ type: 'error', text: 'Failed to update pick: ' + error.message });
-    } else {
-      setMessage({ type: 'success', text: 'User pick adjusted successfully!' });
-      if (selectedUserId) fetchUserPicks(selectedUserId, selectedWeek);
-    }
-    setLoading(false);
-  };
-
-  // Admin Action: Create Invite Code
-  const handleCreateInviteCode = async () => {
-    if (!newCode.trim()) return;
-    setLoading(true);
-    setMessage(null);
-
-    const { error } = await supabase.from('invite_codes').insert([
-      { code: newCode.trim().toUpperCase(), is_active: true }
-    ]);
-
-    if (error) {
-      setMessage({ type: 'error', text: 'Failed to create code: ' + error.message });
-    } else {
-      setMessage({ type: 'success', text: `Invite code "${newCode.toUpperCase()}" created!` });
-      setNewCode('');
-      fetchInviteCodes();
-    }
-    setLoading(false);
-  };
-
-  // Admin Action: Delete User
-  const handleRemoveUser = async (userId: string, teamName: string) => {
-    if (!confirm(`Are you sure you want to remove ${teamName}? This will delete all their picks.`)) return;
-    setLoading(true);
-    setMessage(null);
-
-    const { error } = await supabase.from('profiles').delete().eq('id', userId);
-
-    if (error) {
-      setMessage({ type: 'error', text: 'Failed to remove user: ' + error.message });
-    } else {
-      setMessage({ type: 'success', text: 'User removed from league.' });
+    if (error) setMessage({ type: 'error', text: error.message });
+    else {
+      setMessage({ type: 'success', text: 'User info updated!' });
       fetchUsers();
     }
-    setLoading(false);
+  };
+
+  const handleAdminAddPick = async () => {
+    if (!selectedUser || !selectedGameId || !selectedTeam) return;
+
+    const { error } = await supabase.from('picks').insert({
+      user_id: selectedUser.id,
+      game_id: selectedGameId,
+      week: selectedWeek,
+      selected_team: selectedTeam,
+      is_lock: isLock,
+    });
+
+    if (error) setMessage({ type: 'error', text: error.message });
+    else setMessage({ type: 'success', text: `Pick added for ${selectedUser.team_name}!` });
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-24 max-w-3xl mx-auto px-4 pt-4">
-      {/* Admin Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            🛠️ League Admin Control
-          </h2>
-          <p className="text-xs text-gray-400">Override scores, adjust picks, and manage access</p>
-        </div>
+    <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
+      <h2 className="text-xl font-bold">League Admin Control</h2>
 
-        {/* Week Selector */}
-        <select
-          value={selectedWeek}
-          onChange={(e) => setSelectedWeek(Number(e.target.value))}
-          className="bg-gray-800 border border-gray-700 text-white text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:border-emerald-500"
-        >
-          {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-            <option key={w} value={w}>
-              Week {w}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Sub-Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-gray-800 pb-2 overflow-x-auto">
-        {(['games', 'picks', 'invites', 'users'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveSubTab(tab)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
-              activeSubTab === tab
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-gray-800 text-gray-400 hover:text-white'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Alert Messages */}
       {message && (
-        <div
-          className={`p-3 rounded-lg text-xs border ${
-            message.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-200'
-              : 'bg-red-950/80 border-red-500/50 text-red-200'
-          }`}
-        >
+        <div className="p-2 rounded text-xs bg-emerald-950 text-emerald-200 border border-emerald-500">
           {message.text}
         </div>
       )}
 
-      {/* TAB 1: GAMES & SCORE OVERRIDES */}
-      {activeSubTab === 'games' && (
+      {/* Sub tabs */}
+      <div className="flex gap-2 border-b border-gray-800 pb-2">
+        {(['users', 'add_picks', 'invites'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveSubTab(tab)}
+            className={`text-xs font-bold px-3 py-1 rounded-lg capitalize ${
+              activeSubTab === tab ? 'bg-emerald-600 text-white' : 'text-gray-400'
+            }`}
+          >
+            {tab.replace('_', ' ')}
+          </button>
+        ))}
+      </div>
+
+      {/* Edit User Info */}
+      {activeSubTab === 'users' && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-gray-300">Week {selectedWeek} Game Overrides</h3>
-          {games.map((game) => (
-            <div key={game.id} className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 flex flex-col gap-2">
-              <div className="flex justify-between items-center text-xs font-bold text-gray-300">
-                <span>{game.away_team} @ {game.home_team}</span>
-                <span className="text-[10px] bg-gray-900 px-2 py-0.5 rounded font-mono uppercase">{game.status}</span>
+          {users.map((u) => (
+            <div key={u.id} className="bg-gray-900 border border-gray-800 p-3 rounded-xl flex flex-col gap-2">
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <input
+                  type="text"
+                  defaultValue={u.team_name}
+                  onBlur={(e) => (u.team_name = e.target.value)}
+                  className="bg-gray-800 p-1.5 rounded border border-gray-700 text-white"
+                />
+                <input
+                  type="text"
+                  defaultValue={u.first_name}
+                  onBlur={(e) => (u.first_name = e.target.value)}
+                  className="bg-gray-800 p-1.5 rounded border border-gray-700 text-white"
+                />
+                <input
+                  type="text"
+                  defaultValue={u.last_name}
+                  onBlur={(e) => (u.last_name = e.target.value)}
+                  className="bg-gray-800 p-1.5 rounded border border-gray-700 text-white"
+                />
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[10px] text-gray-400">{game.away_team} Score</label>
-                  <input
-                    type="number"
-                    defaultValue={game.away_score}
-                    onBlur={(e) => (game.away_score = Number(e.target.value))}
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-400">{game.home_team} Score</label>
-                  <input
-                    type="number"
-                    defaultValue={game.home_score}
-                    onBlur={(e) => (game.home_score = Number(e.target.value))}
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <select
-                  defaultValue={game.winner_team || ''}
-                  onChange={(e) => (game.winner_team = e.target.value || null)}
-                  className="bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white flex-1"
-                >
-                  <option value="">No Winner Set</option>
-                  <option value={game.away_team}>{game.away_team}</option>
-                  <option value={game.home_team}>{game.home_team}</option>
-                  <option value="TIE">TIE</option>
-                </select>
-
-                <button
-                  disabled={loading}
-                  onClick={() => handleUpdateGameScore(game.id, game.home_score, game.away_score, 'post', game.winner_team)}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded transition-colors"
-                >
-                  Save Override
-                </button>
-              </div>
+              <button
+                onClick={() => handleUpdateUserProfile(u.id, u.team_name, u.first_name, u.last_name)}
+                className="bg-emerald-600 text-xs font-bold py-1 rounded text-white"
+              >
+                Save Changes
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* TAB 2: USER PICK ADJUSTMENTS */}
-      {activeSubTab === 'picks' && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-gray-300">Adjust User Picks</h3>
+      {/* Admin Add Picks for Users */}
+      {activeSubTab === 'add_picks' && (
+        <div className="flex flex-col gap-3 bg-gray-900 border border-gray-800 p-4 rounded-xl">
+          <label className="text-xs text-gray-400">Select User</label>
           <select
-            value={selectedUserId}
-            onChange={(e) => setSelectedUserId(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-xs text-white"
+            onChange={(e) => setSelectedUser(users.find((u) => u.id === e.target.value))}
+            className="bg-gray-800 text-xs p-2 rounded text-white border border-gray-700"
           >
-            <option value="">Select User to Edit</option>
+            <option value="">Select Member</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.team_name} ({u.first_name} {u.last_name})
+                {u.team_name} ({u.first_name})
               </option>
             ))}
           </select>
 
-          {selectedUserId && userPicks.map((pick) => (
-            <div key={pick.id} className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 flex justify-between items-center gap-2">
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-white">Pick: {pick.selected_team}</span>
-                <span className="text-[10px] text-gray-400">{pick.is_lock ? '🔒 Lock of the Week' : 'Standard Pick'}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  step="0.5"
-                  defaultValue={pick.points_awarded}
-                  onBlur={(e) => handleUpdateUserPick(pick.id, pick.selected_team, pick.is_lock, Number(e.target.value))}
-                  className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white font-mono"
-                />
-                <span className="text-xs text-gray-400">pts</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* TAB 3: INVITE CODES */}
-      {activeSubTab === 'invites' && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-gray-300">Generate Invite Codes</h3>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              placeholder="e.g. PICKSIX2025"
-              value={newCode}
-              onChange={(e) => setNewCode(e.target.value)}
-              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white flex-1 uppercase"
-            />
-            <button
-              onClick={handleCreateInviteCode}
-              disabled={loading || !newCode.trim()}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-lg"
-            >
-              Add Code
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-1.5 mt-2">
-            {inviteCodes.map((inv) => (
-              <div key={inv.code} className="bg-gray-800/60 border border-gray-700/60 rounded-lg p-2.5 flex justify-between items-center text-xs">
-                <span className="font-mono font-bold text-emerald-400">{inv.code}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded ${inv.is_active ? 'bg-emerald-950 text-emerald-300' : 'bg-gray-900 text-gray-500'}`}>
-                  {inv.is_active ? 'Active' : 'Used/Inactive'}
-                </span>
-              </div>
+          <label className="text-xs text-gray-400">Select Week</label>
+          <select
+            value={selectedWeek}
+            onChange={(e) => setSelectedWeek(Number(e.target.value))}
+            className="bg-gray-800 text-xs p-2 rounded text-white border border-gray-700"
+          >
+            {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+              <option key={w} value={w}>
+                Week {w}
+              </option>
             ))}
-          </div>
-        </div>
-      )}
+          </select>
 
-      {/* TAB 4: USER MANAGEMENT */}
-      {activeSubTab === 'users' && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-bold text-gray-300">League Members</h3>
-          {users.map((u) => (
-            <div key={u.id} className="bg-gray-800/80 border border-gray-700 rounded-xl p-3 flex justify-between items-center">
-              <div>
-                <p className="font-bold text-xs text-white">{u.team_name}</p>
-                <p className="text-[11px] text-gray-400">{u.first_name} {u.last_name}</p>
-              </div>
+          <label className="text-xs text-gray-400">Select Game</label>
+          <select
+            onChange={(e) => {
+              setSelectedGameId(e.target.value);
+              const g = games.find((item) => item.id === e.target.value);
+              if (g) setSelectedTeam(g.home_team);
+            }}
+            className="bg-gray-800 text-xs p-2 rounded text-white border border-gray-700"
+          >
+            <option value="">Select Matchup</option>
+            {games.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.away_team} @ {g.home_team}
+              </option>
+            ))}
+          </select>
 
-              {!u.is_admin && (
-                <button
-                  onClick={() => handleRemoveUser(u.id, u.team_name)}
-                  className="bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/50 text-[10px] font-bold px-2.5 py-1 rounded"
-                >
-                  Remove User
-                </button>
-              )}
+          {selectedGameId && (
+            <div className="flex items-center gap-4 py-2">
+              <label className="text-xs text-gray-400">Team:</label>
+              <select
+                value={selectedTeam}
+                onChange={(e) => setSelectedTeam(e.target.value)}
+                className="bg-gray-800 text-xs p-2 rounded text-white border border-gray-700"
+              >
+                {games
+                  .filter((g) => g.id === selectedGameId)
+                  .map((g) => (
+                    <>
+                      <option key={g.away_team} value={g.away_team}>
+                        {g.away_team}
+                      </option>
+                      <option key={g.home_team} value={g.home_team}>
+                        {g.home_team}
+                      </option>
+                    </>
+                  ))}
+              </select>
+
+              <label className="flex items-center gap-1.5 text-xs text-amber-400 font-bold">
+                <input
+                  type="checkbox"
+                  checked={isLock}
+                  onChange={(e) => setIsLock(e.target.checked)}
+                />
+                Lock?
+              </label>
             </div>
-          ))}
+          )}
+
+          <button
+            onClick={handleAdminAddPick}
+            className="bg-emerald-600 text-xs font-bold py-2 rounded text-white mt-2"
+          >
+            Force Add Pick
+          </button>
         </div>
       )}
     </div>
