@@ -1,1 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
+/* Mobile UI base tweaks */
+html, body {
+  background-color: #030712;
+  color: #ffffff;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbar for tab navigation on mobile */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
