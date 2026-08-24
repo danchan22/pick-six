@@ -1,20 +1,22 @@
-export async function GET(request: Request) {
-  // Check for secret header or query param
-  const { searchParams } = new URL(request.url);
-  const authHeader = request.headers.get('authorization');
-  const secret = searchParams.get('secret');
-
-  if (secret !== process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
-
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
 export async function GET(request: Request) {
   try {
-    // 1. Fetch current NFL scoreboard from ESPN Public API
+    // 1. Verify Secret Key (for cron security)
+    const { searchParams } = new URL(request.url);
+    const secret = searchParams.get('secret');
+    const authHeader = request.headers.get('authorization');
+
+    if (
+      process.env.CRON_SECRET &&
+      secret !== process.env.CRON_SECRET &&
+      authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // 2. Fetch current NFL scoreboard from ESPN Public API
     const espnRes = await fetch(
       'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
       { cache: 'no-store' }
@@ -29,13 +31,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'No events found' });
     }
 
-    // 2. Map ESPN events to Supabase games structure
+    // 3. Map ESPN events to Supabase games structure
     const gamesToUpsert = events.map((event: any) => {
       const competition = event.competitions[0];
       const home = competition.competitors.find((c: any) => c.homeAway === 'home');
       const away = competition.competitors.find((c: any) => c.homeAway === 'away');
-      const statusState = event.status.type.state; // 'pre', 'in', 'post'
-      const statusName = event.status.type.name;   // e.g., 'STATUS_POSTPONED', 'STATUS_CANCELED'
+      const statusState = event.status.type.state;
+      const statusName = event.status.type.name;
 
       let gameStatus = statusState;
       if (statusName === 'STATUS_POSTPONED') gameStatus = 'postponed';
@@ -63,14 +65,14 @@ export async function GET(request: Request) {
       };
     });
 
-    // 3. Upsert games into Supabase
+    // 4. Upsert games into Supabase
     const { error: gamesError } = await supabaseAdmin
       .from('games')
       .upsert(gamesToUpsert, { onConflict: 'id' });
 
     if (gamesError) throw gamesError;
 
-    // 4. Fetch all picks for finished or canceled games to update scoring
+    // 5. Fetch all picks for finished or canceled games to update scoring
     const completedGameIds = gamesToUpsert
       .filter((g: any) => g.status === 'post' || g.status === 'canceled')
       .map((g: any) => g.id);
@@ -87,25 +89,21 @@ export async function GET(request: Request) {
           let points = 0.0;
 
           if (game.status === 'canceled') {
-            points = 0.0; // Rule: Canceled games score 0
+            points = 0.0;
           } else if (game.status === 'post') {
             const isWin = pick.selected_team === game.winner_team;
-            const isTie = game.winner_team === 'TIE';
 
             if (pick.is_lock) {
-              // Lock of the Week Scoring Rules: Win (+2), Tie (+0.5), Loss (-1)
-              if (isWin) points = 2.0;
-              else if (isTie) points = 0.5;
-              else points = -1.0;
+              // Lock of the Week: Win (+2), Tie (-1), Loss (-1)
+              points = isWin ? 2.0 : -1.0;
             } else {
-              // Standard Pick Scoring Rules: Win (+1), Tie (+0.5), Loss (0)
+              // Standard Pick: Win (+1), Tie (+0.5), Loss (0)
               if (isWin) points = 1.0;
-              else if (isTie) points = 0.5;
+              else if (game.winner_team === 'TIE') points = 0.5;
               else points = 0.0;
             }
           }
 
-          // Update pick points
           await supabaseAdmin
             .from('picks')
             .update({ points_awarded: points })
