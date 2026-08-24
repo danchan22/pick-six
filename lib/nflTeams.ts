@@ -37,6 +37,10 @@ export function getTeamNickname(fullTeamName: string): string {
   return NFL_TEAMS[fullTeamName]?.name || fullTeamName;
 }
 
+export function getTeamAbbr(fullTeamName: string): string {
+  return (NFL_TEAMS[fullTeamName]?.abbr || fullTeamName.slice(0, 3)).toUpperCase();
+}
+
 export function getTeamLogoUrl(fullTeamName: string): string {
   const abbr = NFL_TEAMS[fullTeamName]?.abbr;
   if (!abbr) return 'https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/nfl.png';
