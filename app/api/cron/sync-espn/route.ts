@@ -1,3 +1,14 @@
+export async function GET(request: Request) {
+  // Check for secret header or query param
+  const { searchParams } = new URL(request.url);
+  const authHeader = request.headers.get('authorization');
+  const secret = searchParams.get('secret');
+
+  if (secret !== process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 
