@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import PicksTab from '@/components/Tabs/PicksTab';
 import LeaderboardTab from '@/components/Tabs/LeaderboardTab';
+import RulesTab from '@/components/Tabs/RulesTab'; // <-- Added Import
 import PickAlertBanner from '@/components/Shared/PickAlertBanner';
 import AuthModal from '@/components/Modals/AuthModal';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard'>('picks');
+  const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'rules'>('picks'); // <-- Updated State
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
@@ -16,7 +17,6 @@ export default function Home() {
   const [hasLock, setHasLock] = useState(false);
 
   useEffect(() => {
-    // 1. Fetch initial auth state
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
@@ -28,7 +28,6 @@ export default function Home() {
       setSession(session);
     });
 
-    // 2. Fetch current active week from latest game in Supabase
     fetchCurrentWeek();
 
     return () => subscription.unsubscribe();
@@ -76,7 +75,7 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white flex flex-col font-sans selection:bg-emerald-500 selection:text-black">
-      {/* Header */}
+      {/* Top Header */}
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -98,7 +97,7 @@ export default function Home() {
       </header>
 
       {/* Alert Banner if picks are missing */}
-      {session && (
+      {session && activeTab !== 'rules' && (
         <PickAlertBanner
           currentWeek={currentWeek}
           picksCount={userPicksCount}
@@ -107,13 +106,15 @@ export default function Home() {
         />
       )}
 
-      {/* Main Tab Content */}
+      {/* Dynamic Tab Content */}
       <div className="flex-1">
         {session ? (
           activeTab === 'picks' ? (
             <PicksTab userId={session.user.id} currentWeek={currentWeek} />
-          ) : (
+          ) : activeTab === 'leaderboard' ? (
             <LeaderboardTab />
+          ) : (
+            <RulesTab /> // <-- Added View Rendering
           )
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
@@ -139,7 +140,7 @@ export default function Home() {
               }`}
             >
               <span className="text-lg">🎯</span>
-              <span className="text-[11px]">Make Picks</span>
+              <span className="text-[11px]">Picks</span>
             </button>
 
             <button
@@ -149,7 +150,18 @@ export default function Home() {
               }`}
             >
               <span className="text-lg">🏆</span>
-              <span className="text-[11px]">Leaderboard</span>
+              <span className="text-[11px]">Standings</span>
+            </button>
+
+            {/* Added Navigation Item */}
+            <button
+              onClick={() => setActiveTab('rules')}
+              className={`flex flex-col items-center gap-1 transition-colors ${
+                activeTab === 'rules' ? 'text-emerald-400 font-bold' : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <span className="text-lg">📖</span>
+              <span className="text-[11px]">Rules</span>
             </button>
           </div>
         </nav>
