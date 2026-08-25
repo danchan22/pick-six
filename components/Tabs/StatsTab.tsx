@@ -192,33 +192,33 @@ export default function StatsTab() {
         </div>
       )}
 
-      {/* Subtab 2: Popular (Sortable) */}
+      {/* Subtab 2: Popular (Sortable with Fixed Column Widths) */}
       {subTab === 'popular' && (
         <div className="flex flex-col gap-2">
           <div className="bg-gray-900 border border-gray-800 p-3 rounded-xl text-xs flex justify-between items-center font-bold text-gray-400 select-none">
             <button
               onClick={() => handleSort('team')}
-              className="hover:text-white transition-colors flex items-center gap-1"
+              className="hover:text-white transition-colors inline-flex items-center gap-1 whitespace-nowrap"
             >
               Team {sortField === 'team' && (sortAsc ? '↑' : '↓')}
             </button>
 
-            <div className="flex gap-3 font-mono text-[10px]">
+            <div className="flex gap-2 font-mono text-[10px]">
               <button
                 onClick={() => handleSort('timesPicked')}
-                className="w-10 text-right hover:text-white transition-colors"
+                className="min-w-[54px] text-right hover:text-white transition-colors whitespace-nowrap inline-flex items-center justify-end gap-0.5"
               >
                 Picked {sortField === 'timesPicked' && (sortAsc ? '↑' : '↓')}
               </button>
               <button
                 onClick={() => handleSort('timesLotw')}
-                className="w-10 text-right hover:text-white transition-colors"
+                className="min-w-[54px] text-right hover:text-white transition-colors whitespace-nowrap inline-flex items-center justify-end gap-0.5"
               >
                 LOTW {sortField === 'timesLotw' && (sortAsc ? '↑' : '↓')}
               </button>
               <button
                 onClick={() => handleSort('maxedOutCount')}
-                className="w-10 text-right hover:text-white transition-colors"
+                className="min-w-[54px] text-right hover:text-white transition-colors whitespace-nowrap inline-flex items-center justify-end gap-0.5"
               >
                 Maxed {sortField === 'maxedOutCount' && (sortAsc ? '↑' : '↓')}
               </button>
@@ -230,15 +230,15 @@ export default function StatsTab() {
               key={item.teamFullName}
               className="bg-gray-900 border border-gray-800 p-2.5 rounded-xl flex justify-between items-center text-xs"
             >
-              <div className="flex items-center gap-2">
-                <img src={getTeamLogoUrl(item.teamFullName)} alt="" className="w-6 h-6 object-contain" />
-                <span className="font-bold text-white">{item.teamNick}</span>
+              <div className="flex items-center gap-2 min-w-0 pr-2">
+                <img src={getTeamLogoUrl(item.teamFullName)} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
+                <span className="font-bold text-white truncate">{item.teamNick}</span>
               </div>
 
-              <div className="flex gap-3 font-mono font-bold text-right text-xs pr-1">
-                <span className="w-10 text-emerald-400">{item.timesPicked}</span>
-                <span className="w-10 text-amber-400">{item.timesLotw}</span>
-                <span className="w-10 text-indigo-400">{item.maxedOutCount}</span>
+              <div className="flex gap-2 font-mono font-bold text-right text-xs flex-shrink-0">
+                <span className="min-w-[54px] text-emerald-400">{item.timesPicked}</span>
+                <span className="min-w-[54px] text-amber-400">{item.timesLotw}</span>
+                <span className="min-w-[54px] text-indigo-400">{item.maxedOutCount}</span>
               </div>
             </div>
           ))}
