@@ -109,26 +109,41 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
     fetchSeasonTeamCounts();
   };
 
-  // Handle slot tap for clearing or swapping positions
+  const isGameLocked = (kickoffTime: string) => {
+    if (forceUnlockForTesting) return false;
+    return new Date() >= new Date(kickoffTime);
+  };
+
+  const standardPicks = picks.filter((p) => !p.is_lock);
+  const lockPick = picks.find((p) => p.is_lock);
+
+  const orderedPicks: (Pick | null)[] = [
+    standardPicks[0] || null,
+    standardPicks[1] || null,
+    standardPicks[2] || null,
+    standardPicks[3] || null,
+    standardPicks[4] || null,
+    lockPick || standardPicks[5] || null,
+  ];
+
+  const pickSlots = Array.from({ length: 6 }, (_, index) => orderedPicks[index] || null);
+
   const handleSlotClick = async (index: number) => {
-    const currentSlotPick = orderedPicks[index];
+    const currentSlotPick = pickSlots[index];
 
     if (selectedSlotForSwap === null) {
       if (currentSlotPick) {
-        // First tap selects slot for swapping or deletion
         setSelectedSlotForSwap(index);
       }
     } else {
       if (selectedSlotForSwap === index) {
-        // Tapping same slot twice deletes the pick
         if (currentSlotPick) {
           await deletePick(currentSlotPick.id);
         }
         setSelectedSlotForSwap(null);
       } else {
-        // Swap picks between slots
-        const firstPick = orderedPicks[selectedSlotForSwap];
-        const secondPick = orderedPicks[index];
+        const firstPick = pickSlots[selectedSlotForSwap];
+        const secondPick = pickSlots[index];
 
         if (firstPick) {
           await supabase
@@ -148,23 +163,6 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
       }
     }
   };
-
-  const isGameLocked = (kickoffTime: string) => {
-    if (forceUnlockForTesting) return false;
-    return new Date() >= new Date(kickoffTime);
-  };
-
-  const standardPicks = picks.filter((p) => !p.is_lock);
-  const lockPick = picks.find((p) => p.is_lock);
-
-  const orderedPicks: (Pick | null)[] = [
-    standardPicks[0] || null,
-    standardPicks[1] || null,
-    standardPicks[2] || null,
-    standardPicks[3] || null,
-    standardPicks[4] || null,
-    lockPick || standardPicks[5] || null,
-  ];
 
   return (
     <div className="flex flex-col gap-4 pb-40 max-w-2xl mx-auto px-4 pt-4 text-white">
@@ -304,7 +302,7 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
               MY WEEK {selectedWeek} PICKS
             </h3>
             <span className="text-[9px] text-gray-400">
-              {selectedSlotForSwap !== null ? 'Tap target slot to swap or delete' : 'Tap slot to swap/clear'}
+              {selectedSlotForSwap !== null ? 'Tap target slot to swap/clear' : 'Tap slot to swap/clear'}
             </span>
           </div>
 
