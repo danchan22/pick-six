@@ -29,6 +29,7 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
   const [picks, setPicks] = useState<Pick[]>([]);
   const [teamPickCounts, setTeamPickCounts] = useState<Record<string, number>>({});
   const [forceUnlockForTesting, setForceUnlockForTesting] = useState(false);
+  const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<number | null>(null);
 
   useEffect(() => {
     if (currentWeek) setSelectedWeek(currentWeek);
@@ -55,18 +56,9 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
       .select('*, games(*)')
       .eq('user_id', userId)
       .eq('week', selectedWeek);
-    
-    // Ensure slot #6 is designated as Lock automatically
+
     if (data) {
-      const sorted = [...data];
-      for (let i = 0; i < sorted.length; i++) {
-        const shouldBeLock = i === 5; // 6th slot
-        if (sorted[i].is_lock !== shouldBeLock) {
-          await supabase.from('picks').update({ is_lock: shouldBeLock }).eq('id', sorted[i].id);
-          sorted[i].is_lock = shouldBeLock;
-        }
-      }
-      setPicks(sorted);
+      setPicks(data);
     }
   };
 
@@ -86,8 +78,8 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
   const deletePick = async (pickId: string) => {
     const { error } = await supabase.from('picks').delete().eq('id', pickId);
     if (!error) {
-      await fetchUserPicks();
-      await fetchSeasonTeamCounts();
+      setPicks((prev) => prev.filter((p) => p.id !== pickId));
+      fetchSeasonTeamCounts();
     }
   };
 
@@ -95,18 +87,15 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
     const existingPick = picks.find((p) => p.game_id === gameId);
 
     if (existingPick?.selected_team === team) {
-      // Clear pick if tapped again
       await deletePick(existingPick.id);
     } else if (existingPick) {
-      // Swap team selection
       await supabase
         .from('picks')
         .update({ selected_team: team })
         .eq('id', existingPick.id);
-      await fetchUserPicks();
+      fetchUserPicks();
     } else {
       if (picks.length >= 6) return;
-      
       const isSixthPick = picks.length === 5;
       await supabase.from('picks').insert({
         user_id: userId,
@@ -115,9 +104,49 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
         selected_team: team,
         is_lock: isSixthPick,
       });
-      await fetchUserPicks();
+      fetchUserPicks();
     }
-    await fetchSeasonTeamCounts();
+    fetchSeasonTeamCounts();
+  };
+
+  // Handle slot tap for clearing or swapping positions
+  const handleSlotClick = async (index: number) => {
+    const currentSlotPick = orderedPicks[index];
+
+    if (selectedSlotForSwap === null) {
+      if (currentSlotPick) {
+        // First tap selects slot for swapping or deletion
+        setSelectedSlotForSwap(index);
+      }
+    } else {
+      if (selectedSlotForSwap === index) {
+        // Tapping same slot twice deletes the pick
+        if (currentSlotPick) {
+          await deletePick(currentSlotPick.id);
+        }
+        setSelectedSlotForSwap(null);
+      } else {
+        // Swap picks between slots
+        const firstPick = orderedPicks[selectedSlotForSwap];
+        const secondPick = orderedPicks[index];
+
+        if (firstPick) {
+          await supabase
+            .from('picks')
+            .update({ is_lock: index === 5 })
+            .eq('id', firstPick.id);
+        }
+        if (secondPick) {
+          await supabase
+            .from('picks')
+            .update({ is_lock: selectedSlotForSwap === 5 })
+            .eq('id', secondPick.id);
+        }
+
+        setSelectedSlotForSwap(null);
+        fetchUserPicks();
+      }
+    }
   };
 
   const isGameLocked = (kickoffTime: string) => {
@@ -125,15 +154,28 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
     return new Date() >= new Date(kickoffTime);
   };
 
-  const pickSlots = Array.from({ length: 6 }, (_, index) => picks[index] || null);
+  const standardPicks = picks.filter((p) => !p.is_lock);
+  const lockPick = picks.find((p) => p.is_lock);
+
+  const orderedPicks: (Pick | null)[] = [
+    standardPicks[0] || null,
+    standardPicks[1] || null,
+    standardPicks[2] || null,
+    standardPicks[3] || null,
+    standardPicks[4] || null,
+    lockPick || standardPicks[5] || null,
+  ];
 
   return (
-    <div className="flex flex-col gap-4 pb-36 max-w-2xl mx-auto px-4 pt-4 text-white">
+    <div className="flex flex-col gap-4 pb-40 max-w-2xl mx-auto px-4 pt-4 text-white">
       {/* Week Selector Bar */}
       <div className="flex justify-between items-center bg-gray-900 p-2.5 rounded-xl border border-gray-800">
         <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setSelectedWeek((prev) => Math.max(1, prev - 1))}
+            onClick={() => {
+              setSelectedWeek((prev) => Math.max(1, prev - 1));
+              setSelectedSlotForSwap(null);
+            }}
             disabled={selectedWeek <= 1}
             className="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
           >
@@ -142,7 +184,10 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
 
           <select
             value={selectedWeek}
-            onChange={(e) => setSelectedWeek(Number(e.target.value))}
+            onChange={(e) => {
+              setSelectedWeek(Number(e.target.value));
+              setSelectedSlotForSwap(null);
+            }}
             className="bg-gray-800 text-xs font-bold text-white px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none"
           >
             {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
@@ -153,7 +198,10 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
           </select>
 
           <button
-            onClick={() => setSelectedWeek((prev) => Math.min(18, prev + 1))}
+            onClick={() => {
+              setSelectedWeek((prev) => Math.min(18, prev + 1));
+              setSelectedSlotForSwap(null);
+            }}
             disabled={selectedWeek >= 18}
             className="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
           >
@@ -250,13 +298,17 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
 
       {/* Fixed Bottom Floating "My Picks" Widget */}
       <div className="fixed bottom-[57px] left-0 right-0 z-30 bg-gray-950/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2.5 shadow-2xl">
-        <div className="max-w-md mx-auto flex flex-col gap-1">
+        <div className="max-w-md mx-auto flex flex-col gap-1.5">
           <div className="flex justify-between items-center px-1">
-            <h3 className="text-[10px] font-extrabold text-gray-300 tracking-wider">MY PICKS</h3>
-            <span className="text-[9px] text-gray-500">Slot 6 = Lock of the Week</span>
+            <h3 className="text-[11px] font-extrabold text-emerald-400 tracking-wider uppercase">
+              MY WEEK {selectedWeek} PICKS
+            </h3>
+            <span className="text-[9px] text-gray-400">
+              {selectedSlotForSwap !== null ? 'Tap target slot to swap or delete' : 'Tap slot to swap/clear'}
+            </span>
           </div>
 
-          <div className="flex justify-between items-start gap-1">
+          <div className="flex justify-between items-start gap-1.5">
             {pickSlots.map((pick, i) => {
               let game = games.find((g) => g.id === pick?.game_id) || pick?.games;
               let isHome = game?.home_team === pick?.selected_team;
@@ -284,7 +336,8 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
                 }
               }
 
-              const isSlotLock = i === 5; // 6th slot always LOTW
+              const isSlotLock = i === 5;
+              const isSelectedForSwap = selectedSlotForSwap === i;
 
               return (
                 <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
@@ -293,19 +346,23 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
                   </span>
 
                   <button
-                    onClick={() => pick && deletePick(pick.id)}
-                    className={`w-full aspect-square max-w-[44px] rounded-lg border flex items-center justify-center p-1 relative shadow-sm transition-transform active:scale-95 ${slotBg} ${
-                      isSlotLock ? 'border-2 border-amber-400 ring-2 ring-amber-400/40' : 'border-gray-300'
+                    onClick={() => handleSlotClick(i)}
+                    className={`w-full aspect-square max-w-[50px] rounded-xl border flex items-center justify-center p-0.5 relative shadow-md transition-transform active:scale-95 ${slotBg} ${
+                      isSelectedForSwap
+                        ? 'border-2 border-emerald-400 ring-4 ring-emerald-500/50 scale-105'
+                        : isSlotLock
+                        ? 'border-2 border-amber-400 ring-2 ring-amber-400/50'
+                        : 'border-gray-300'
                     }`}
                   >
                     {pick ? (
                       <img
                         src={getTeamLogoUrl(pick.selected_team)}
                         alt={pick.selected_team}
-                        className="w-5 h-5 object-contain"
+                        className="w-9 h-9 object-contain"
                       />
                     ) : (
-                      <span className="text-gray-400 font-bold text-xs">?</span>
+                      <span className="text-gray-400 font-bold text-sm">?</span>
                     )}
 
                     {isSlotLock && (
@@ -315,7 +372,7 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
                     )}
                   </button>
 
-                  <span className="text-[8px] font-semibold text-gray-400 truncate w-full text-center mt-0.5">
+                  <span className="text-[8px] font-bold text-gray-400 truncate w-full text-center mt-1">
                     {pick ? `${oppPrefix} ${oppAbbr}` : '-'}
                   </span>
                 </div>
