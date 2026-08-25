@@ -249,4 +249,29 @@ export default function ProfileModal({
       </div>
     </div>
   );
+
+/* Scale control snippet for ProfileModal.tsx */
+const [zoom, setZoom] = useState(1);
+
+<div className="w-20 h-20 rounded-full border-2 border-emerald-500 overflow-hidden flex items-center justify-center">
+  <img 
+    src={avatarUrl} 
+    style={{ transform: `scale(${zoom})` }}
+    className="w-full h-full object-cover transition-transform" 
+  />
+</div>
+
+<div className="flex items-center gap-2 mt-2">
+  <span className="text-[10px] text-gray-400">Zoom:</span>
+  <input 
+    type="range" 
+    min="1" 
+    max="2.5" 
+    step="0.1" 
+    value={zoom} 
+    onChange={(e) => setZoom(parseFloat(e.target.value))} 
+    className="w-24 accent-emerald-500"
+  />
+</div>
+  
 }
