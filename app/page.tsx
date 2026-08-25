@@ -45,17 +45,23 @@ export default function Home() {
     if (data) setProfile(data);
   };
 
-  const fetchCurrentWeek = async () => {
-    const { data } = await supabase
-      .from('games')
-      .select('week')
-      .order('kickoff_time', { ascending: false })
-      .limit(1);
+const fetchCurrentWeek = async () => {
+  const now = new Date().toISOString();
+  
+  // Find the earliest game that hasn't finished yet, or default to 1
+  const { data } = await supabase
+    .from('games')
+    .select('week')
+    .gte('kickoff_time', now)
+    .order('kickoff_time', { ascending: true })
+    .limit(1);
 
-    if (data && data.length > 0) {
-      setCurrentWeek(data[0].week);
-    }
-  };
+  if (data && data.length > 0) {
+    setCurrentWeek(data[0].week);
+  } else {
+    setCurrentWeek(1);
+  }
+};
 
   const checkUserPicksStatus = async () => {
     if (!session?.user?.id) return;
