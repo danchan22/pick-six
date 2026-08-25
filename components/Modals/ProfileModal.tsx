@@ -22,7 +22,6 @@ const ALL_NFL_TEAMS = [
   'Seattle Seahawks', 'Tampa Bay Buccaneers', 'Tennessee Titans', 'Washington Commanders'
 ];
 
-// Alphabetical sort by team nickname (49ers, Bears, Bengals... Titans, Vikings)
 const SORTED_TEAMS = [...ALL_NFL_TEAMS].sort((a, b) =>
   getTeamNickname(a).localeCompare(getTeamNickname(b))
 );
@@ -39,7 +38,6 @@ export default function ProfileModal({
   const [teamName, setTeamName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-  // Avatar Crop/Zoom States
   const [rawImage, setRawImage] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -216,7 +214,7 @@ export default function ProfileModal({
           ✕
         </button>
 
-        {/* Sub-Nav Tabs */}
+        {/* Tab Buttons */}
         <div className="flex gap-2 mb-4 border-b border-gray-800 pb-2">
           <button
             onClick={() => setActiveTab('profile')}
@@ -354,7 +352,6 @@ export default function ProfileModal({
             </button>
           </form>
         ) : (
-          /* Teams Available List */
           <div className="flex flex-col gap-2 overflow-y-auto pr-1 max-h-[65vh]">
             <p className="text-[11px] text-gray-400 mb-1">
               Seasonal pick counts across all 18 weeks (Max 6 per team).
@@ -385,7 +382,6 @@ export default function ProfileModal({
                     </span>
                   </div>
 
-                  {/* 6 Box Usage Grid */}
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {Array.from({ length: 6 }).map((_, i) => {
                       const pick = teamPicks[i];
