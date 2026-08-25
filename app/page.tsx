@@ -45,35 +45,25 @@ export default function Home() {
     if (data) setProfile(data);
   };
 
-const fetchCurrentWeek = async () => {
-  const now = new Date().toISOString();
-  
-  // Find the earliest game that hasn't finished yet, or default to 1
-  const { data } = await supabase
-    .from('games')
-    .select('week')
-    .gte('kickoff_time', now)
-    .order('kickoff_time', { ascending: true })
-    .limit(1);
-
-  if (data && data.length > 0) {
-    setCurrentWeek(data[0].week);
-  } else {
-    setCurrentWeek(1);
-  }
-};
-
-  const checkUserPicksStatus = async () => {
-    if (!session?.user?.id) return;
+  const fetchCurrentWeek = async () => {
+    const now = new Date().toISOString();
     const { data } = await supabase
-      .from('picks')
-      .select('is_lock')
-      .eq('user_id', session.user.id)
-      .eq('week', currentWeek);
+      .from('games')
+      .select('week')
+      .gte('kickoff_time', now)
+      .order('kickoff_time', { ascending: true })
+      .limit(1);
 
-    const picks = data || [];
-    setUserPicksCount(picks.length);
-    setHasLock(picks.some((p) => p.is_lock));
+    if (data && data.length > 0) {
+      setCurrentWeek(data[0].week);
+    } else {
+      setCurrentWeek(1);
+    }
+  };
+
+  const handlePicksChanged = (count: number, lockStatus: boolean) => {
+    setUserPicksCount(count);
+    setHasLock(lockStatus);
   };
 
   if (loading) {
@@ -90,7 +80,6 @@ const fetchCurrentWeek = async () => {
 
   return (
     <main className="min-h-screen bg-gray-950 text-white flex flex-col font-sans">
-      {/* Header with User Avatar Dropdown */}
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -116,7 +105,6 @@ const fetchCurrentWeek = async () => {
                 <span className="text-xs font-bold text-gray-200">{profile.first_name}</span>
               </button>
 
-              {/* User Menu Dropdown */}
               {userMenuOpen && (
                 <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
                   <button
@@ -153,7 +141,11 @@ const fetchCurrentWeek = async () => {
       <div className="flex-1">
         {session ? (
           activeTab === 'picks' ? (
-            <PicksTab userId={session.user.id} currentWeek={currentWeek} />
+            <PicksTab
+              userId={session.user.id}
+              currentWeek={currentWeek}
+              onPicksChanged={handlePicksChanged}
+            />
           ) : activeTab === 'leaderboard' ? (
             <LeaderboardTab />
           ) : activeTab === 'rules' ? (
@@ -171,7 +163,7 @@ const fetchCurrentWeek = async () => {
         )}
       </div>
 
-      <AuthModal isOpen={!session} onSuccess={() => checkUserPicksStatus()} />
+      <AuthModal isOpen={!session} onSuccess={() => {}} />
       {session && (
         <ProfileModal
           isOpen={isProfileOpen}
@@ -181,7 +173,6 @@ const fetchCurrentWeek = async () => {
         />
       )}
 
-      {/* Bottom Navigation */}
       {session && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-6 py-2">
           <div className="max-w-md mx-auto flex items-center justify-around">
