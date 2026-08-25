@@ -62,7 +62,7 @@ export default function AdminTab() {
     else setMessage({ type: 'success', text: `Pick added for ${selectedUser.team_name}!` });
   };
 
-const handleSyncAllWeeks = async () => {
+  const handleSyncAllWeeks = async () => {
     setLoading(true);
     setMessage(null);
     setSyncProgress('Syncing all 18 weeks on the server... please wait a few seconds.');
@@ -81,19 +81,6 @@ const handleSyncAllWeeks = async () => {
       setMessage({
         type: 'success',
         text: data.message,
-      });
-      fetchWeekGames();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
-    } finally {
-      setLoading(false);
-      setSyncProgress('');
-    }
-  };
-
-      setMessage({
-        type: 'success',
-        text: `Successfully imported ${totalImported} games across all 18 weeks!`,
       });
       fetchWeekGames();
     } catch (err: any) {
@@ -286,4 +273,3 @@ const handleSyncAllWeeks = async () => {
     </div>
   );
 }
-//Hello
