@@ -31,8 +31,7 @@ export default function LeaderboardTab() {
     const computed = profiles.map((p) => {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
       const totalPoints = userPicks.reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
-      
-      // Filter ONLY completed games to calculate record
+
       const completedPicks = userPicks.filter((pick) => pick.games?.status === 'post');
       const wins = completedPicks.filter((pick) => (pick.points_awarded || 0) > 0).length;
       const losses = completedPicks.filter((pick) => (pick.points_awarded || 0) < 0 || (pick.points_awarded === 0 && pick.games?.winner_team !== 'TIE')).length;
@@ -154,7 +153,7 @@ export default function LeaderboardTab() {
                 <button
                   onClick={() => setViewWeek((prev) => Math.max(1, prev - 1))}
                   disabled={viewWeek <= 1}
-                  className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+                  className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors text-white"
                 >
                   ◀
                 </button>
@@ -174,7 +173,7 @@ export default function LeaderboardTab() {
                 <button
                   onClick={() => setViewWeek((prev) => Math.min(18, prev + 1))}
                   disabled={viewWeek >= 18}
-                  className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+                  className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors text-white"
                 >
                   ▶
                 </button>
@@ -207,20 +206,58 @@ export default function LeaderboardTab() {
                     );
                   }
 
+                  const isFinished = game?.status === 'post';
                   const teamNick = getTeamNickname(pick.selected_team);
                   const isHome = game?.home_team === pick.selected_team;
                   const opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
                   const oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
                   const oppPrefix = isHome ? 'vs' : '@';
 
+                  const selectedScore = isHome ? game?.home_score : game?.away_score;
+                  const oppScore = isHome ? game?.away_score : game?.home_score;
+
+                  let outcome = '';
+                  let outcomeBadgeColor = 'text-gray-400';
+                  let cardBgBorder = 'bg-gray-800/80 border-gray-700/80';
+                  const pts = pick.points_awarded ?? 0;
+                  let formattedPts = '0';
+                  let ptsColor = 'text-gray-400';
+
+                  if (isFinished) {
+                    if (game.winner_team === pick.selected_team) {
+                      outcome = 'W';
+                      outcomeBadgeColor = 'text-emerald-400';
+                      cardBgBorder = 'bg-emerald-950/30 border-emerald-500/60';
+                    } else if (game.winner_team === 'TIE') {
+                      outcome = 'T';
+                      outcomeBadgeColor = 'text-amber-400';
+                      cardBgBorder = 'bg-amber-950/30 border-amber-500/60';
+                    } else {
+                      outcome = 'L';
+                      outcomeBadgeColor = 'text-red-400';
+                      cardBgBorder = 'bg-red-950/30 border-red-500/60';
+                    }
+
+                    if (pts > 0) {
+                      formattedPts = `+${pts}`;
+                      ptsColor = 'text-emerald-400';
+                    } else if (pts < 0) {
+                      formattedPts = `${pts}`;
+                      ptsColor = 'text-red-400';
+                    } else {
+                      formattedPts = '0';
+                      ptsColor = 'text-gray-400';
+                    }
+                  } else {
+                    if (pick.is_lock) {
+                      cardBgBorder = 'bg-amber-950/20 border-amber-500/60';
+                    }
+                  }
+
                   return (
                     <div
                       key={pick.id}
-                      className={`p-2 rounded-xl border flex items-center justify-between text-xs transition-colors ${
-                        pick.is_lock
-                          ? 'bg-amber-950/20 border-amber-500/60'
-                          : 'bg-gray-800/80 border-gray-700/80'
-                      }`}
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${cardBgBorder}`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
                         <img
@@ -237,13 +274,18 @@ export default function LeaderboardTab() {
                       </div>
 
                       <div className="flex items-center gap-2 flex-shrink-0">
+                        {isFinished && (
+                          <span className={`font-mono font-bold text-[11px] ${outcomeBadgeColor}`}>
+                            {outcome} {selectedScore}-{oppScore}
+                          </span>
+                        )}
                         {pick.is_lock && (
                           <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1.5 py-0.5 rounded font-bold">
                             🔒 LOCK
                           </span>
                         )}
-                        <span className="font-mono font-bold text-emerald-400 min-w-[36px] text-right">
-                          +{pick.points_awarded || 0}
+                        <span className={`font-mono font-bold min-w-[32px] text-right ${ptsColor}`}>
+                          {formattedPts}
                         </span>
                       </div>
                     </div>
