@@ -110,7 +110,7 @@ export default function PickHistoryModal({
           </span>
         </div>
 
-        {/* Compact Pick List formatted like Standings */}
+        {/* Formatted Pick List */}
         <div className="flex flex-col gap-1.5">
           {picks.length === 0 ? (
             <p className="text-xs text-gray-500 text-center py-8">
@@ -119,20 +119,58 @@ export default function PickHistoryModal({
           ) : (
             picks.map((pick) => {
               const game = pick.games;
+              const isFinished = game?.status === 'post';
               const teamNick = getTeamNickname(pick.selected_team);
               const isHome = game?.home_team === pick.selected_team;
               const opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
               const oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
               const oppPrefix = isHome ? 'vs' : '@';
 
+              const selectedScore = isHome ? game?.home_score : game?.away_score;
+              const oppScore = isHome ? game?.away_score : game?.home_score;
+
+              let outcome = '';
+              let outcomeBadgeColor = 'text-gray-400';
+              let cardBgBorder = 'bg-gray-800/80 border-gray-700/80';
+              const pts = pick.points_awarded ?? 0;
+              let formattedPts = '0';
+              let ptsColor = 'text-gray-400';
+
+              if (isFinished) {
+                if (game.winner_team === pick.selected_team) {
+                  outcome = 'W';
+                  outcomeBadgeColor = 'text-emerald-400';
+                  cardBgBorder = 'bg-emerald-950/30 border-emerald-500/60';
+                } else if (game.winner_team === 'TIE') {
+                  outcome = 'T';
+                  outcomeBadgeColor = 'text-amber-400';
+                  cardBgBorder = 'bg-amber-950/30 border-amber-500/60';
+                } else {
+                  outcome = 'L';
+                  outcomeBadgeColor = 'text-red-400';
+                  cardBgBorder = 'bg-red-950/30 border-red-500/60';
+                }
+
+                if (pts > 0) {
+                  formattedPts = `+${pts}`;
+                  ptsColor = 'text-emerald-400';
+                } else if (pts < 0) {
+                  formattedPts = `${pts}`;
+                  ptsColor = 'text-red-400';
+                } else {
+                  formattedPts = '0';
+                  ptsColor = 'text-gray-400';
+                }
+              } else {
+                if (pick.is_lock) {
+                  cardBgBorder = 'bg-amber-950/20 border-amber-500/60';
+                }
+              }
+
               return (
                 <div
                   key={pick.id}
-                  className={`p-2 rounded-xl border flex items-center justify-between text-xs transition-colors ${
-                    pick.is_lock
-                      ? 'bg-amber-950/20 border-amber-500/60'
-                      : 'bg-gray-800/80 border-gray-700/80'
-                  }`}
+                  className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${cardBgBorder}`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
                     <img
@@ -149,13 +187,18 @@ export default function PickHistoryModal({
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {isFinished && (
+                      <span className={`font-mono font-bold text-[11px] ${outcomeBadgeColor}`}>
+                        {outcome} {selectedScore}-{oppScore}
+                      </span>
+                    )}
                     {pick.is_lock && (
                       <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1.5 py-0.5 rounded font-bold">
                         🔒 LOCK
                       </span>
                     )}
-                    <span className="font-mono font-bold text-emerald-400 min-w-[36px] text-right">
-                      +{pick.points_awarded || 0}
+                    <span className={`font-mono font-bold min-w-[32px] text-right ${ptsColor}`}>
+                      {formattedPts}
                     </span>
                   </div>
                 </div>
