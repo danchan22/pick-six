@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { getTeamLogoUrl } from '@/lib/nflTeams';
+import { getTeamNickname, getTeamLogoUrl, getTeamAbbr } from '@/lib/nflTeams';
 
 export default function LeaderboardTab() {
   const [standings, setStandings] = useState<any[]>([]);
@@ -53,7 +53,19 @@ export default function LeaderboardTab() {
       .eq('user_id', userId)
       .eq('week', week);
 
-    setMemberPicks(data || []);
+    const rawPicks = data || [];
+
+    // Ensure only the single designated lock displays as lock
+    let lockFound = false;
+    const sanitizedPicks = rawPicks.map((pick) => {
+      if (pick.is_lock && !lockFound) {
+        lockFound = true;
+        return pick;
+      }
+      return { ...pick, is_lock: false };
+    });
+
+    setMemberPicks(sanitizedPicks);
   };
 
   return (
@@ -116,10 +128,10 @@ export default function LeaderboardTab() {
         })}
       </div>
 
-      {/* Member Pick Breakdown Modal */}
+      {/* Expanded Single-Screen Member Pick Breakdown Modal */}
       {selectedMember && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-5 shadow-2xl relative">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-5 shadow-2xl relative flex flex-col gap-3">
             <button
               onClick={() => setSelectedMember(null)}
               className="absolute top-4 right-4 text-gray-400 hover:text-white font-bold text-sm"
@@ -127,54 +139,114 @@ export default function LeaderboardTab() {
               ✕
             </button>
 
-            <h3 className="font-bold text-base text-white mb-1">
-              {selectedMember.team_name}
-            </h3>
-            <p className="text-xs text-gray-400 mb-4">
-              {selectedMember.first_name} {selectedMember.last_name} • {selectedMember.totalPoints} pts
-            </p>
-
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-xs font-bold text-gray-300">Select Week</span>
-              <select
-                value={viewWeek}
-                onChange={(e) => setViewWeek(Number(e.target.value))}
-                className="bg-gray-800 text-xs text-white px-2 py-1 rounded border border-gray-700"
-              >
-                {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-                  <option key={w} value={w}>
-                    Week {w}
-                  </option>
-                ))}
-              </select>
+            <div>
+              <h3 className="font-bold text-base text-white">
+                {selectedMember.team_name}
+              </h3>
+              <p className="text-xs text-gray-400">
+                {selectedMember.first_name} {selectedMember.last_name} • {selectedMember.totalPoints} pts
+              </p>
             </div>
 
-            <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+            {/* Week Selector Bar with Arrows */}
+            <div className="flex items-center justify-between bg-gray-800/80 p-2 rounded-xl border border-gray-700/80">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setViewWeek((prev) => Math.max(1, prev - 1))}
+                  disabled={viewWeek <= 1}
+                  className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+                >
+                  ◀
+                </button>
+
+                <select
+                  value={viewWeek}
+                  onChange={(e) => setViewWeek(Number(e.target.value))}
+                  className="bg-gray-700 text-xs font-bold text-white px-3 py-1 rounded-lg border border-gray-600 focus:outline-none"
+                >
+                  {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                    <option key={w} value={w}>
+                      Week {w}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={() => setViewWeek((prev) => Math.min(18, prev + 1))}
+                  disabled={viewWeek >= 18}
+                  className="w-7 h-7 flex items-center justify-center bg-gray-700 hover:bg-gray-600 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+                >
+                  ▶
+                </button>
+              </div>
+
+              <span className="text-[10px] text-gray-400 font-semibold font-mono">
+                {memberPicks.length}/6 Picks
+              </span>
+            </div>
+
+            {/* Compact 6-Slot Pick List (Fits completely on screen) */}
+            <div className="flex flex-col gap-1.5">
               {memberPicks.length === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-6">No picks for Week {viewWeek}</p>
+                <p className="text-xs text-gray-500 text-center py-8">
+                  No picks submitted for Week {viewWeek}
+                </p>
               ) : (
                 memberPicks.map((pick) => {
                   const game = pick.games;
                   const isLocked = new Date() >= new Date(game?.kickoff_time);
                   const isSelf = selectedMember.id === currentUserId;
 
-                  // Privacy check: Hide unkickoffed picks for other members
                   if (!isLocked && !isSelf) {
                     return (
-                      <div key={pick.id} className="bg-gray-800/50 p-2.5 rounded-lg flex justify-between items-center text-xs">
+                      <div
+                        key={pick.id}
+                        className="bg-gray-800/50 p-2.5 rounded-lg border border-gray-700/50 flex justify-between items-center text-xs"
+                      >
                         <span className="text-gray-400 font-bold">🔒 Hidden Pick (Kickoff Pending)</span>
                       </div>
                     );
                   }
 
+                  const teamNick = getTeamNickname(pick.selected_team);
+                  const isHome = game?.home_team === pick.selected_team;
+                  const opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
+                  const oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
+                  const oppPrefix = isHome ? 'vs' : '@';
+
                   return (
-                    <div key={pick.id} className="bg-gray-800 p-2.5 rounded-lg flex justify-between items-center text-xs">
-                      <div className="flex items-center gap-2">
-                        <img src={getTeamLogoUrl(pick.selected_team)} alt="" className="w-5 h-5 object-contain" />
-                        <span className="font-bold text-white">{pick.selected_team}</span>
-                        {pick.is_lock && <span className="text-[10px] text-amber-400 font-bold">🔒 LOCK</span>}
+                    <div
+                      key={pick.id}
+                      className={`p-2 rounded-xl border flex items-center justify-between text-xs transition-colors ${
+                        pick.is_lock
+                          ? 'bg-amber-950/20 border-amber-500/60'
+                          : 'bg-gray-800/80 border-gray-700/80'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={getTeamLogoUrl(pick.selected_team)}
+                          alt=""
+                          className="w-6 h-6 object-contain flex-shrink-0"
+                        />
+                        <div className="truncate flex items-center gap-1">
+                          <span className="font-bold text-white">{teamNick}</span>
+                          <span className="text-gray-400 font-normal text-[11px]">
+                            {oppPrefix} {oppAbbr}
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-mono font-bold text-emerald-400">+{pick.points_awarded || 0} pts</span>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {pick.is_lock && (
+                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1.5 py-0.5 rounded font-bold">
+                            🔒 LOCK
+                          </span>
+                        )}
+                        <span className="font-mono font-bold text-emerald-400 min-w-[36px] text-right">
+                          +{pick.points_awarded || 0}
+                        </span>
+                      </div>
                     </div>
                   );
                 })
