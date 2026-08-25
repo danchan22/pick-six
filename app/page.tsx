@@ -10,6 +10,7 @@ import PickAlertBanner from '@/components/Shared/PickAlertBanner';
 import AuthModal from '@/components/Modals/AuthModal';
 import ProfileModal from '@/components/Modals/ProfileModal';
 import PickHistoryModal from '@/components/Modals/PickHistoryModal';
+import TeamsAvailableModal from '@/components/Modals/TeamsAvailableModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'rules' | 'admin'>('picks');
@@ -18,6 +19,7 @@ export default function Home() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isTeamsAvailableOpen, setIsTeamsAvailableOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [userPicksCount, setUserPicksCount] = useState(0);
@@ -108,7 +110,7 @@ export default function Home() {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-44 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
+                <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
@@ -117,6 +119,15 @@ export default function Home() {
                     className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
                   >
                     <span>📜</span> My Pick History
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setIsTeamsAvailableOpen(true);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                  >
+                    <span>📊</span> Teams Available
                   </button>
                   <button
                     onClick={() => {
@@ -192,6 +203,13 @@ export default function Home() {
             userId={session.user.id}
             profile={profile}
             currentWeek={currentWeek}
+          />
+
+          <TeamsAvailableModal
+            isOpen={isTeamsAvailableOpen}
+            onClose={() => setIsTeamsAvailableOpen(false)}
+            userId={session.user.id}
+            profile={profile}
           />
         </>
       )}
