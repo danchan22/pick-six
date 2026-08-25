@@ -15,10 +15,16 @@ const ALL_NFL_TEAMS = [
   'Seattle Seahawks', 'Tampa Bay Buccaneers', 'Tennessee Titans', 'Washington Commanders'
 ];
 
+type SortField = 'team' | 'timesPicked' | 'timesLotw' | 'maxedOutCount';
+
 export default function StatsTab() {
   const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('perfection');
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<any[]>([]);
+
+  // Sorting state for Popular subtab
+  const [sortField, setSortField] = useState<SortField>('timesPicked');
+  const [sortAsc, setSortAsc] = useState<boolean>(false);
 
   useEffect(() => {
     fetchStatsData();
@@ -30,6 +36,15 @@ export default function StatsTab() {
 
     setProfiles(profs || []);
     setAllPicks(picksData || []);
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(false);
+    }
   };
 
   // Perfection Calculations
@@ -56,13 +71,12 @@ export default function StatsTab() {
     (a, b) => (userPerfectWeeks[b.id] || 0) - (userPerfectWeeks[a.id] || 0)
   );
 
-  // Popular Calculations
+  // Popular Calculations & Interactive Sorting
   const teamPopularStats = ALL_NFL_TEAMS.map((teamFullName) => {
     const teamPicks = allPicks.filter((p) => p.selected_team === teamFullName);
     const timesPicked = teamPicks.length;
     const timesLotw = teamPicks.filter((p) => p.is_lock).length;
 
-    // Count how many users have maxed out (6 picks) this team
     const userCounts: Record<string, number> = {};
     teamPicks.forEach((p) => {
       userCounts[p.user_id] = (userCounts[p.user_id] || 0) + 1;
@@ -76,7 +90,15 @@ export default function StatsTab() {
       timesLotw,
       maxedOutCount,
     };
-  }).sort((a, b) => b.timesPicked - a.timesPicked);
+  }).sort((a, b) => {
+    let comp = 0;
+    if (sortField === 'team') {
+      comp = a.teamNick.localeCompare(b.teamNick);
+    } else {
+      comp = b[sortField] - a[sortField];
+    }
+    return sortAsc ? -comp : comp;
+  });
 
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
@@ -170,15 +192,36 @@ export default function StatsTab() {
         </div>
       )}
 
-      {/* Subtab 2: Popular */}
+      {/* Subtab 2: Popular (Sortable) */}
       {subTab === 'popular' && (
         <div className="flex flex-col gap-2">
-          <div className="bg-gray-900 border border-gray-800 p-3 rounded-xl text-xs flex justify-between font-bold text-gray-400">
-            <span>NFL Team</span>
-            <div className="flex gap-4 font-mono text-[10px]">
-              <span>Picked</span>
-              <span>LOTW</span>
-              <span>Maxed</span>
+          <div className="bg-gray-900 border border-gray-800 p-3 rounded-xl text-xs flex justify-between items-center font-bold text-gray-400 select-none">
+            <button
+              onClick={() => handleSort('team')}
+              className="hover:text-white transition-colors flex items-center gap-1"
+            >
+              Team {sortField === 'team' && (sortAsc ? '↑' : '↓')}
+            </button>
+
+            <div className="flex gap-3 font-mono text-[10px]">
+              <button
+                onClick={() => handleSort('timesPicked')}
+                className="w-10 text-right hover:text-white transition-colors"
+              >
+                Picked {sortField === 'timesPicked' && (sortAsc ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSort('timesLotw')}
+                className="w-10 text-right hover:text-white transition-colors"
+              >
+                LOTW {sortField === 'timesLotw' && (sortAsc ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSort('maxedOutCount')}
+                className="w-10 text-right hover:text-white transition-colors"
+              >
+                Maxed {sortField === 'maxedOutCount' && (sortAsc ? '↑' : '↓')}
+              </button>
             </div>
           </div>
 
@@ -192,10 +235,10 @@ export default function StatsTab() {
                 <span className="font-bold text-white">{item.teamNick}</span>
               </div>
 
-              <div className="flex gap-6 font-mono font-bold text-right text-xs pr-1">
-                <span className="w-8 text-emerald-400">{item.timesPicked}</span>
-                <span className="w-8 text-amber-400">{item.timesLotw}</span>
-                <span className="w-8 text-indigo-400">{item.maxedOutCount}</span>
+              <div className="flex gap-3 font-mono font-bold text-right text-xs pr-1">
+                <span className="w-10 text-emerald-400">{item.timesPicked}</span>
+                <span className="w-10 text-amber-400">{item.timesLotw}</span>
+                <span className="w-10 text-indigo-400">{item.maxedOutCount}</span>
               </div>
             </div>
           ))}
@@ -205,7 +248,7 @@ export default function StatsTab() {
       {/* Subtab 3: History */}
       {subTab === 'history' && (
         <div className="flex flex-col gap-3">
-          <p className="text-xs text-gray-400">Celebrate our league's past champions.</p>
+          <p className="text-xs text-gray-400">Celebrate our league&apos;s past champions.</p>
 
           <div className="bg-gradient-to-r from-amber-950/60 to-yellow-950/60 border-2 border-amber-400 rounded-2xl p-4 shadow-xl flex justify-between items-center">
             <div>
