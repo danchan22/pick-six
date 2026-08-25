@@ -68,16 +68,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     if (error) return;
 
     const currentPicks = data || [];
-
-    // Auto-sanitize: If duplicate locks exist in DB, keep only 1 lock
-    const lockPicks = currentPicks.filter((p) => p.is_lock);
-    if (lockPicks.length > 1) {
-      for (let i = 0; i < lockPicks.length - 1; i++) {
-        await supabase.from('picks').update({ is_lock: false }).eq('id', lockPicks[i].id);
-        lockPicks[i].is_lock = false;
-      }
-    }
-
     setPicks(currentPicks);
 
     if (selectedWeek === currentWeek && onPicksChanged) {
@@ -106,6 +96,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   };
 
   const handleSelectTeam = async (gameId: string, team: string) => {
+    const isChaosWeek = selectedWeek === 18;
     const existingPick = picks.find((p) => p.game_id === gameId);
 
     if (existingPick?.selected_team === team) {
@@ -117,14 +108,18 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         .eq('id', existingPick.id);
       fetchUserPicks();
     } else {
-      if (picks.length >= 6) return;
-      const isSixthPick = picks.length === 5;
+      if (!isChaosWeek && picks.length >= 6) return;
+
+      // Lock Logic Fix: New pick is Lock ONLY if no lock exists AND this is the 6th pick
+      const hasExistingLock = picks.some((p) => p.is_lock);
+      const shouldBeLock = !isChaosWeek && !hasExistingLock && picks.length === 5;
+
       await supabase.from('picks').insert({
         user_id: userId,
         game_id: gameId,
         week: selectedWeek,
         selected_team: team,
-        is_lock: isSixthPick,
+        is_lock: shouldBeLock,
       });
       fetchUserPicks();
     }
@@ -136,7 +131,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     return new Date() >= new Date(kickoffTime);
   };
 
-  // Safe 6-slot rendering that guarantees all 6 picks always show
+  const isChaosWeek = selectedWeek === 18;
   const lockPick = picks.find((p) => p.is_lock);
   const nonLockPicks = picks.filter((p) => p.id !== lockPick?.id);
 
@@ -152,6 +147,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   const pickSlots = Array.from({ length: 6 }, (_, index) => orderedPicks[index] || null);
 
   const handleSlotClick = async (index: number) => {
+    if (isChaosWeek) return;
     const currentSlotPick = pickSlots[index];
 
     if (selectedSlotForSwap === null) {
@@ -168,7 +164,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         const firstPick = pickSlots[selectedSlotForSwap];
         const secondPick = pickSlots[index];
 
-        // Reset all lock flags for the week first when touching slot 6
         if (index === 5 || selectedSlotForSwap === 5) {
           await supabase
             .from('picks')
@@ -198,6 +193,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
 
   return (
     <div className="flex flex-col gap-4 pb-64 max-w-2xl mx-auto px-4 pt-4 text-white">
+      {/* Week Selector Bar */}
       <div className="flex justify-between items-center bg-gray-900 p-2.5 rounded-xl border border-gray-800">
         <div className="flex items-center gap-1.5">
           <button
@@ -250,10 +246,23 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         </button>
       </div>
 
+      {/* Week 18 Chaos Week Banner */}
+      {isChaosWeek && (
+        <div className="bg-gradient-to-r from-purple-950/80 to-indigo-950/80 border-2 border-purple-500/80 p-4 rounded-xl shadow-2xl flex flex-col gap-1 text-center">
+          <h2 className="text-base font-black tracking-widest text-purple-300 uppercase">
+            🌀 CHAOS WEEK
+          </h2>
+          <p className="text-xs text-purple-200">
+            Welcome to Chaos Week. You must pick every game.
+          </p>
+        </div>
+      )}
+
       <div className="text-[11px] font-semibold text-gray-400 text-right px-1">
         All Times Eastern
       </div>
 
+      {/* Matchup Schedule Cards */}
       <div className="flex flex-col gap-3">
         {games.map((game) => {
           const locked = isGameLocked(game.kickoff_time);
@@ -284,7 +293,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                 ].map((team) => {
                   const isSelected = currentPick?.selected_team === team.full;
                   const count = teamPickCounts[team.full] || 0;
-                  const disabled = locked || (count >= 6 && !isSelected);
+                  const disabled = locked || (!isChaosWeek && count >= 6 && !isSelected);
 
                   let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
                   if (isSelected) {
@@ -314,7 +323,9 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                         />
                         <div className="flex flex-col items-start">
                           <span className="text-xs font-semibold">{team.nick}</span>
-                          <span className="text-[9px] text-gray-400">Picked {count}/6</span>
+                          {!isChaosWeek && (
+                            <span className="text-[9px] text-gray-400">Picked {count}/6</span>
+                          )}
                         </div>
                       </div>
                       <span className="text-[10px] text-gray-400 font-mono font-medium">
@@ -329,90 +340,93 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         })}
       </div>
 
-      <div className="fixed bottom-[57px] left-0 right-0 z-30 bg-gray-950/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2.5 shadow-2xl">
-        <div className="max-w-md mx-auto flex flex-col gap-1.5">
-          <div className="flex justify-between items-center px-1">
-            <h3 className="text-[11px] font-extrabold text-emerald-400 tracking-wider uppercase">
-              MY WEEK {selectedWeek} PICKS
-            </h3>
-            <span className="text-[9px] text-gray-400">
-              {selectedSlotForSwap !== null ? 'Tap target slot to swap/clear' : 'Tap slot to swap/clear'}
-            </span>
-          </div>
+      {/* Standard 6-Slot Bottom Widget (Hidden during Chaos Week) */}
+      {!isChaosWeek && (
+        <div className="fixed bottom-[57px] left-0 right-0 z-30 bg-gray-950/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2.5 shadow-2xl">
+          <div className="max-w-md mx-auto flex flex-col gap-1.5">
+            <div className="flex justify-between items-center px-1">
+              <h3 className="text-[11px] font-extrabold text-emerald-400 tracking-wider uppercase">
+                MY WEEK {selectedWeek} PICKS
+              </h3>
+              <span className="text-[9px] text-gray-400">
+                {selectedSlotForSwap !== null ? 'Tap target slot to swap/clear' : 'Tap slot to swap/clear'}
+              </span>
+            </div>
 
-          <div className="flex justify-between items-start gap-1.5">
-            {pickSlots.map((pick, i) => {
-              let game = games.find((g) => g.id === pick?.game_id) || pick?.games;
-              let isHome = game?.home_team === pick?.selected_team;
-              let opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
-              let oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
-              let oppPrefix = isHome ? 'vs' : '@';
+            <div className="flex justify-between items-start gap-1.5">
+              {pickSlots.map((pick, i) => {
+                let game = games.find((g) => g.id === pick?.game_id) || pick?.games;
+                let isHome = game?.home_team === pick?.selected_team;
+                let opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
+                let oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
+                let oppPrefix = isHome ? 'vs' : '@';
 
-              let outcomeLabel = '?';
-              let outcomeColor = 'text-gray-500';
-              let slotBg = 'bg-white';
+                let outcomeLabel = '?';
+                let outcomeColor = 'text-gray-500';
+                let slotBg = 'bg-white';
 
-              if (game?.status === 'post' && pick) {
-                if (pick.selected_team === game.winner_team) {
-                  outcomeLabel = 'W';
-                  outcomeColor = 'text-emerald-400';
-                  slotBg = 'bg-emerald-100';
-                } else if (game.winner_team === 'TIE') {
-                  outcomeLabel = 'T';
-                  outcomeColor = 'text-amber-400';
-                  slotBg = 'bg-amber-100';
-                } else {
-                  outcomeLabel = 'L';
-                  outcomeColor = 'text-red-400';
-                  slotBg = 'bg-red-100';
+                if (game?.status === 'post' && pick) {
+                  if (pick.selected_team === game.winner_team) {
+                    outcomeLabel = 'W';
+                    outcomeColor = 'text-emerald-400';
+                    slotBg = 'bg-emerald-100';
+                  } else if (game.winner_team === 'TIE') {
+                    outcomeLabel = 'T';
+                    outcomeColor = 'text-amber-400';
+                    slotBg = 'bg-amber-100';
+                  } else {
+                    outcomeLabel = 'L';
+                    outcomeColor = 'text-red-400';
+                    slotBg = 'bg-red-100';
+                  }
                 }
-              }
 
-              const isSlotLock = i === 5;
-              const isSelectedForSwap = selectedSlotForSwap === i;
+                const isSlotLock = i === 5;
+                const isSelectedForSwap = selectedSlotForSwap === i;
 
-              return (
-                <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
-                  <span className={`text-[10px] font-black ${outcomeColor}`}>
-                    {outcomeLabel}
-                  </span>
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
+                    <span className={`text-[10px] font-black ${outcomeColor}`}>
+                      {outcomeLabel}
+                    </span>
 
-                  <button
-                    onClick={() => handleSlotClick(i)}
-                    className={`w-full aspect-square max-w-[50px] rounded-xl border flex items-center justify-center p-0.5 relative shadow-md transition-transform active:scale-95 ${slotBg} ${
-                      isSelectedForSwap
-                        ? 'border-2 border-emerald-400 ring-4 ring-emerald-500/50 scale-105'
-                        : isSlotLock
-                        ? 'border-2 border-amber-400 ring-2 ring-amber-400/50'
-                        : 'border-gray-300'
-                    }`}
-                  >
-                    {pick ? (
-                      <img
-                        src={getTeamLogoUrl(pick.selected_team)}
-                        alt={pick.selected_team}
-                        className="w-9 h-9 object-contain"
-                      />
-                    ) : (
-                      <span className="text-gray-400 font-bold text-sm">?</span>
-                    )}
+                    <button
+                      onClick={() => handleSlotClick(i)}
+                      className={`w-full aspect-square max-w-[50px] rounded-xl border flex items-center justify-center p-0.5 relative shadow-md transition-transform active:scale-95 ${slotBg} ${
+                        isSelectedForSwap
+                          ? 'border-2 border-emerald-400 ring-4 ring-emerald-500/50 scale-105'
+                          : isSlotLock
+                          ? 'border-2 border-amber-400 ring-2 ring-amber-400/50'
+                          : 'border-gray-300'
+                      }`}
+                    >
+                      {pick ? (
+                        <img
+                          src={getTeamLogoUrl(pick.selected_team)}
+                          alt={pick.selected_team}
+                          className="w-9 h-9 object-contain"
+                        />
+                      ) : (
+                        <span className="text-gray-400 font-bold text-sm">?</span>
+                      )}
 
-                    {isSlotLock && (
-                      <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gray-900 border-2 border-amber-400 rounded-full w-4 h-4 flex items-center justify-center shadow-md">
-                        <span className="text-[8px]">🔒</span>
-                      </div>
-                    )}
-                  </button>
+                      {isSlotLock && (
+                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gray-900 border-2 border-amber-400 rounded-full w-4 h-4 flex items-center justify-center shadow-md">
+                          <span className="text-[8px]">🔒</span>
+                        </div>
+                      )}
+                    </button>
 
-                  <span className="text-[8px] font-bold text-gray-400 truncate w-full text-center mt-1">
-                    {pick ? `${oppPrefix} ${oppAbbr}` : '-'}
-                  </span>
-                </div>
-              );
-            })}
+                    <span className="text-[8px] font-bold text-gray-400 truncate w-full text-center mt-1">
+                      {pick ? `${oppPrefix} ${oppAbbr}` : '-'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
