@@ -21,6 +21,7 @@ export default function ProfileModal({
   const [lastName, setLastName] = useState('');
   const [teamName, setTeamName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userPicks, setUserPicks] = useState<any[]>([]);
@@ -62,6 +63,7 @@ export default function ProfileModal({
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       setUploading(true);
+      setMessage(null);
       if (!event.target.files || event.target.files.length === 0) return;
 
       const file = event.target.files[0];
@@ -143,7 +145,13 @@ export default function ProfileModal({
         </div>
 
         {message && (
-          <div className="p-2 rounded text-xs mb-3 bg-emerald-950 text-emerald-200 border border-emerald-500/50">
+          <div
+            className={`p-2 rounded text-xs mb-3 border ${
+              message.type === 'success'
+                ? 'bg-emerald-950 text-emerald-200 border-emerald-500/50'
+                : 'bg-red-950 text-red-200 border-red-500/50'
+            }`}
+          >
             {message.text}
           </div>
         )}
@@ -151,13 +159,35 @@ export default function ProfileModal({
         {activeTab === 'profile' ? (
           <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
             <div className="flex flex-col items-center gap-2">
-              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-600 to-indigo-600 border-2 border-emerald-500 flex items-center justify-center overflow-hidden font-bold text-lg text-white">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-600 to-indigo-600 border-2 border-emerald-500 flex items-center justify-center overflow-hidden font-bold text-lg text-white">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  <img
+                    src={avatarUrl}
+                    alt="Avatar"
+                    style={{ transform: `scale(${zoom})` }}
+                    className="w-full h-full object-cover transition-transform"
+                  />
                 ) : (
                   initials
                 )}
               </div>
+
+              {/* Avatar Zoom Control */}
+              {avatarUrl && (
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-[10px] text-gray-400">Zoom:</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="2.5"
+                    step="0.1"
+                    value={zoom}
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                    className="w-24 accent-emerald-500"
+                  />
+                </div>
+              )}
+
               <label className="cursor-pointer text-[11px] text-emerald-400 font-semibold hover:underline">
                 {uploading ? 'Uploading...' : 'Change Profile Picture'}
                 <input
@@ -207,7 +237,7 @@ export default function ProfileModal({
             <button
               type="submit"
               disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-sm mt-2"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-sm mt-2 transition-colors"
             >
               {saving ? 'Saving...' : 'Save Profile'}
             </button>
@@ -231,15 +261,24 @@ export default function ProfileModal({
 
             <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
               {userPicks.length === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-4">No picks for Week {selectedWeekHistory}</p>
+                <p className="text-xs text-gray-500 text-center py-4">
+                  No picks for Week {selectedWeekHistory}
+                </p>
               ) : (
                 userPicks.map((pick) => (
-                  <div key={pick.id} className="bg-gray-800/80 p-2.5 rounded-lg flex justify-between items-center text-xs">
+                  <div
+                    key={pick.id}
+                    className="bg-gray-800/80 p-2.5 rounded-lg flex justify-between items-center text-xs"
+                  >
                     <div>
                       <span className="font-bold text-white">{pick.selected_team}</span>
-                      {pick.is_lock && <span className="ml-2 text-[10px] text-amber-400 font-bold">🔒 LOCK</span>}
+                      {pick.is_lock && (
+                        <span className="ml-2 text-[10px] text-amber-400 font-bold">🔒 LOCK</span>
+                      )}
                     </div>
-                    <span className="font-mono font-bold text-emerald-400">+{pick.points_awarded || 0} pts</span>
+                    <span className="font-mono font-bold text-emerald-400">
+                      +{pick.points_awarded || 0} pts
+                    </span>
                   </div>
                 ))
               )}
@@ -249,29 +288,4 @@ export default function ProfileModal({
       </div>
     </div>
   );
-
-/* Scale control snippet for ProfileModal.tsx */
-const [zoom, setZoom] = useState(1);
-
-<div className="w-20 h-20 rounded-full border-2 border-emerald-500 overflow-hidden flex items-center justify-center">
-  <img 
-    src={avatarUrl} 
-    style={{ transform: `scale(${zoom})` }}
-    className="w-full h-full object-cover transition-transform" 
-  />
-</div>
-
-<div className="flex items-center gap-2 mt-2">
-  <span className="text-[10px] text-gray-400">Zoom:</span>
-  <input 
-    type="range" 
-    min="1" 
-    max="2.5" 
-    step="0.1" 
-    value={zoom} 
-    onChange={(e) => setZoom(parseFloat(e.target.value))} 
-    className="w-24 accent-emerald-500"
-  />
-</div>
-  
 }
