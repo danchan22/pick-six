@@ -197,7 +197,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-40 max-w-2xl mx-auto px-4 pt-4 text-white">
+    <div className="flex flex-col gap-4 pb-64 max-w-2xl mx-auto px-4 pt-4 text-white">
       <div className="flex justify-between items-center bg-gray-900 p-2.5 rounded-xl border border-gray-800">
         <div className="flex items-center gap-1.5">
           <button
