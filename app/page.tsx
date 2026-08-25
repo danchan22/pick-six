@@ -9,6 +9,7 @@ import AdminTab from '@/components/Tabs/AdminTab';
 import PickAlertBanner from '@/components/Shared/PickAlertBanner';
 import AuthModal from '@/components/Modals/AuthModal';
 import ProfileModal from '@/components/Modals/ProfileModal';
+import PickHistoryModal from '@/components/Modals/PickHistoryModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'rules' | 'admin'>('picks');
@@ -16,6 +17,7 @@ export default function Home() {
   const [profile, setProfile] = useState<any>(null);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [userPicksCount, setUserPicksCount] = useState(0);
@@ -106,21 +108,31 @@ export default function Home() {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
+                <div className="absolute right-0 mt-2 w-44 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setIsHistoryOpen(true);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                  >
+                    <span>📜</span> My Pick History
+                  </button>
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
                       setIsProfileOpen(true);
                     }}
-                    className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white"
+                    className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
                   >
-                    Edit Profile
+                    <span>⚙️</span> Edit Profile
                   </button>
+                  <div className="border-t border-gray-800 my-1" />
                   <button
                     onClick={() => supabase.auth.signOut()}
-                    className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-gray-800"
+                    className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-gray-800 flex items-center gap-2"
                   >
-                    Sign Out
+                    <span>🚪</span> Sign Out
                   </button>
                 </div>
               )}
@@ -164,13 +176,24 @@ export default function Home() {
       </div>
 
       <AuthModal isOpen={!session} onSuccess={() => {}} />
+
       {session && (
-        <ProfileModal
-          isOpen={isProfileOpen}
-          onClose={() => setIsProfileOpen(false)}
-          userId={session.user.id}
-          onProfileUpdated={() => loadProfile(session.user.id)}
-        />
+        <>
+          <ProfileModal
+            isOpen={isProfileOpen}
+            onClose={() => setIsProfileOpen(false)}
+            userId={session.user.id}
+            onProfileUpdated={() => loadProfile(session.user.id)}
+          />
+
+          <PickHistoryModal
+            isOpen={isHistoryOpen}
+            onClose={() => setIsHistoryOpen(false)}
+            userId={session.user.id}
+            profile={profile}
+            currentWeek={currentWeek}
+          />
+        </>
       )}
 
       {session && (
