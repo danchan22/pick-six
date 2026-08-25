@@ -49,7 +49,12 @@ export default function PickHistoryModal({
       return { ...pick, is_lock: false };
     });
 
-    setPicks(sanitizedPicks);
+    // Ensure Lock of the Week is always sorted at the bottom
+    const standardPicks = sanitizedPicks.filter((p) => !p.is_lock);
+    const lockPick = sanitizedPicks.find((p) => p.is_lock);
+    const orderedPicks = lockPick ? [...standardPicks, lockPick] : standardPicks;
+
+    setPicks(orderedPicks);
   };
 
   if (!isOpen) return null;
@@ -111,7 +116,7 @@ export default function PickHistoryModal({
         </div>
 
         {/* Formatted Pick List */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 max-h-[60vh] overflow-y-auto pr-0.5">
           {picks.length === 0 ? (
             <p className="text-xs text-gray-500 text-center py-8">
               No picks submitted for Week {viewWeek}
@@ -168,38 +173,44 @@ export default function PickHistoryModal({
               }
 
               return (
-                <div
-                  key={pick.id}
-                  className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${cardBgBorder}`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <img
-                      src={getTeamLogoUrl(pick.selected_team)}
-                      alt=""
-                      className="w-6 h-6 object-contain flex-shrink-0"
-                    />
-                    <div className="truncate flex items-center gap-1">
-                      <span className="font-bold text-white">{teamNick}</span>
-                      <span className="text-gray-400 font-normal text-[11px]">
-                        {oppPrefix} {oppAbbr}
+                <div key={pick.id} className="flex flex-col gap-1">
+                  {/* Gold Section Header right above Lock of the Week */}
+                  {pick.is_lock && (
+                    <div className="flex items-center gap-1.5 pt-1.5 pb-0.5 px-0.5">
+                      <span className="text-[10px] font-extrabold tracking-wider text-amber-400 uppercase flex items-center gap-1">
+                        🔒 LOCK OF THE WEEK
+                      </span>
+                      <div className="h-[1px] flex-1 bg-amber-500/30" />
+                    </div>
+                  )}
+
+                  <div
+                    className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-colors ${cardBgBorder}`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={getTeamLogoUrl(pick.selected_team)}
+                        alt=""
+                        className="w-6 h-6 object-contain flex-shrink-0"
+                      />
+                      <div className="truncate flex items-center gap-1">
+                        <span className="font-bold text-white">{teamNick}</span>
+                        <span className="text-gray-400 font-normal text-[11px]">
+                          {oppPrefix} {oppAbbr}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {isFinished && (
+                        <span className={`font-mono font-bold text-[11px] ${outcomeBadgeColor}`}>
+                          {outcome} {selectedScore}-{oppScore}
+                        </span>
+                      )}
+                      <span className={`font-mono font-bold min-w-[24px] text-right ${ptsColor}`}>
+                        {formattedPts}
                       </span>
                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {isFinished && (
-                      <span className={`font-mono font-bold text-[11px] ${outcomeBadgeColor}`}>
-                        {outcome} {selectedScore}-{oppScore}
-                      </span>
-                    )}
-                    {pick.is_lock && (
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/50 px-1.5 py-0.5 rounded font-bold">
-                        🔒 LOCK
-                      </span>
-                    )}
-                    <span className={`font-mono font-bold min-w-[32px] text-right ${ptsColor}`}>
-                      {formattedPts}
-                    </span>
                   </div>
                 </div>
               );
