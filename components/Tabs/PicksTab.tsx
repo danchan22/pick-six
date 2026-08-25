@@ -23,7 +23,13 @@ interface Pick {
   games?: Game;
 }
 
-export default function PicksTab({ userId, currentWeek }: { userId: string; currentWeek: number }) {
+interface PicksTabProps {
+  userId: string;
+  currentWeek: number;
+  onPicksChanged?: (count: number, hasLock: boolean) => void;
+}
+
+export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksTabProps) {
   const [selectedWeek, setSelectedWeek] = useState(currentWeek || 1);
   const [games, setGames] = useState<Game[]>([]);
   const [picks, setPicks] = useState<Pick[]>([]);
@@ -51,14 +57,22 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
   };
 
   const fetchUserPicks = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('picks')
       .select('*, games(*)')
       .eq('user_id', userId)
       .eq('week', selectedWeek);
 
-    if (data) {
-      setPicks(data);
+    if (error) {
+      console.error('Error fetching picks:', error);
+      return;
+    }
+
+    const currentPicks = data || [];
+    setPicks(currentPicks);
+
+    if (selectedWeek === currentWeek && onPicksChanged) {
+      onPicksChanged(currentPicks.length, currentPicks.some((p) => p.is_lock));
     }
   };
 
@@ -77,10 +91,12 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
 
   const deletePick = async (pickId: string) => {
     const { error } = await supabase.from('picks').delete().eq('id', pickId);
-    if (!error) {
-      setPicks((prev) => prev.filter((p) => p.id !== pickId));
-      fetchSeasonTeamCounts();
+    if (error) {
+      alert(`Database Delete Error: ${error.message}`);
+      return;
     }
+    await fetchUserPicks();
+    await fetchSeasonTeamCounts();
   };
 
   const handleSelectTeam = async (gameId: string, team: string) => {
@@ -89,22 +105,24 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
     if (existingPick?.selected_team === team) {
       await deletePick(existingPick.id);
     } else if (existingPick) {
-      await supabase
+      const { error } = await supabase
         .from('picks')
         .update({ selected_team: team })
         .eq('id', existingPick.id);
-      fetchUserPicks();
+      if (error) alert(`Database Update Error: ${error.message}`);
+      else fetchUserPicks();
     } else {
       if (picks.length >= 6) return;
       const isSixthPick = picks.length === 5;
-      await supabase.from('picks').insert({
+      const { error } = await supabase.from('picks').insert({
         user_id: userId,
         game_id: gameId,
         week: selectedWeek,
         selected_team: team,
         is_lock: isSixthPick,
       });
-      fetchUserPicks();
+      if (error) alert(`Database Insert Error: ${error.message}`);
+      else fetchUserPicks();
     }
     fetchSeasonTeamCounts();
   };
@@ -166,7 +184,6 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
 
   return (
     <div className="flex flex-col gap-4 pb-40 max-w-2xl mx-auto px-4 pt-4 text-white">
-      {/* Week Selector Bar */}
       <div className="flex justify-between items-center bg-gray-900 p-2.5 rounded-xl border border-gray-800">
         <div className="flex items-center gap-1.5">
           <button
@@ -223,7 +240,6 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
         All Times Eastern
       </div>
 
-      {/* Matchup Schedule Cards */}
       <div className="flex flex-col gap-3">
         {games.map((game) => {
           const locked = isGameLocked(game.kickoff_time);
@@ -294,7 +310,6 @@ export default function PicksTab({ userId, currentWeek }: { userId: string; curr
         })}
       </div>
 
-      {/* Fixed Bottom Floating "My Picks" Widget */}
       <div className="fixed bottom-[57px] left-0 right-0 z-30 bg-gray-950/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2.5 shadow-2xl">
         <div className="max-w-md mx-auto flex flex-col gap-1.5">
           <div className="flex justify-between items-center px-1">
