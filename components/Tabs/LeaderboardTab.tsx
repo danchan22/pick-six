@@ -24,15 +24,18 @@ export default function LeaderboardTab() {
 
   const fetchLeaderboard = async () => {
     const { data: profiles } = await supabase.from('profiles').select('*');
-    const { data: picks } = await supabase.from('picks').select('*');
+    const { data: picks } = await supabase.from('picks').select('*, games(*)');
 
     if (!profiles) return;
 
     const computed = profiles.map((p) => {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
       const totalPoints = userPicks.reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
-      const wins = userPicks.filter((pick) => (pick.points_awarded || 0) > 0).length;
-      const losses = userPicks.filter((pick) => (pick.points_awarded || 0) < 0 || (pick.points_awarded === 0 && pick.game_id)).length;
+      
+      // Filter ONLY completed games to calculate record
+      const completedPicks = userPicks.filter((pick) => pick.games?.status === 'post');
+      const wins = completedPicks.filter((pick) => (pick.points_awarded || 0) > 0).length;
+      const losses = completedPicks.filter((pick) => (pick.points_awarded || 0) < 0 || (pick.points_awarded === 0 && pick.games?.winner_team !== 'TIE')).length;
 
       return {
         ...p,
@@ -55,7 +58,6 @@ export default function LeaderboardTab() {
 
     const rawPicks = data || [];
 
-    // Ensure only the single designated lock displays as lock
     let lockFound = false;
     const sanitizedPicks = rawPicks.map((pick) => {
       if (pick.is_lock && !lockFound) {
@@ -128,7 +130,6 @@ export default function LeaderboardTab() {
         })}
       </div>
 
-      {/* Expanded Single-Screen Member Pick Breakdown Modal */}
       {selectedMember && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-5 shadow-2xl relative flex flex-col gap-3">
@@ -148,7 +149,6 @@ export default function LeaderboardTab() {
               </p>
             </div>
 
-            {/* Week Selector Bar with Arrows */}
             <div className="flex items-center justify-between bg-gray-800/80 p-2 rounded-xl border border-gray-700/80">
               <div className="flex items-center gap-2">
                 <button
@@ -185,7 +185,6 @@ export default function LeaderboardTab() {
               </span>
             </div>
 
-            {/* Compact 6-Slot Pick List (Fits completely on screen) */}
             <div className="flex flex-col gap-1.5">
               {memberPicks.length === 0 ? (
                 <p className="text-xs text-gray-500 text-center py-8">
