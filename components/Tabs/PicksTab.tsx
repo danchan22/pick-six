@@ -68,6 +68,16 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     if (error) return;
 
     const currentPicks = data || [];
+
+    // Auto-sanitize: If duplicate locks exist in DB, keep only 1 lock
+    const lockPicks = currentPicks.filter((p) => p.is_lock);
+    if (lockPicks.length > 1) {
+      for (let i = 0; i < lockPicks.length - 1; i++) {
+        await supabase.from('picks').update({ is_lock: false }).eq('id', lockPicks[i].id);
+        lockPicks[i].is_lock = false;
+      }
+    }
+
     setPicks(currentPicks);
 
     if (selectedWeek === currentWeek && onPicksChanged) {
@@ -126,16 +136,17 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     return new Date() >= new Date(kickoffTime);
   };
 
-  const standardPicks = picks.filter((p) => !p.is_lock);
+  // Safe 6-slot rendering that guarantees all 6 picks always show
   const lockPick = picks.find((p) => p.is_lock);
+  const nonLockPicks = picks.filter((p) => p.id !== lockPick?.id);
 
   const orderedPicks: (Pick | null)[] = [
-    standardPicks[0] || null,
-    standardPicks[1] || null,
-    standardPicks[2] || null,
-    standardPicks[3] || null,
-    standardPicks[4] || null,
-    lockPick || standardPicks[5] || null,
+    nonLockPicks[0] || null,
+    nonLockPicks[1] || null,
+    nonLockPicks[2] || null,
+    nonLockPicks[3] || null,
+    nonLockPicks[4] || null,
+    lockPick || nonLockPicks[5] || null,
   ];
 
   const pickSlots = Array.from({ length: 6 }, (_, index) => orderedPicks[index] || null);
@@ -157,6 +168,15 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         const firstPick = pickSlots[selectedSlotForSwap];
         const secondPick = pickSlots[index];
 
+        // Reset all lock flags for the week first when touching slot 6
+        if (index === 5 || selectedSlotForSwap === 5) {
+          await supabase
+            .from('picks')
+            .update({ is_lock: false })
+            .eq('user_id', userId)
+            .eq('week', selectedWeek);
+        }
+
         if (firstPick) {
           await supabase
             .from('picks')
@@ -171,7 +191,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         }
 
         setSelectedSlotForSwap(null);
-        fetchUserPicks();
+        await fetchUserPicks();
       }
     }
   };
