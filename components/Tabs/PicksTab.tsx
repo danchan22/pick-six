@@ -110,7 +110,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     } else {
       if (!isChaosWeek && picks.length >= 6) return;
 
-      // Lock Logic Fix: New pick is Lock ONLY if no lock exists AND this is the 6th pick
       const hasExistingLock = picks.some((p) => p.is_lock);
       const shouldBeLock = !isChaosWeek && !hasExistingLock && picks.length === 5;
 
@@ -292,6 +291,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                   { full: game.home_team, nick: homeNickname, record: game.home_record },
                 ].map((team) => {
                   const isSelected = currentPick?.selected_team === team.full;
+                  const isLock = isSelected && currentPick?.is_lock;
                   const count = teamPickCounts[team.full] || 0;
                   const disabled = locked || (!isChaosWeek && count >= 6 && !isSelected);
 
@@ -301,7 +301,11 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                       if (team.full === game.winner_team) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
                       else if (game.winner_team === 'TIE') btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
                       else btnColor = 'bg-red-600/30 border-red-500 text-white font-bold';
+                    } else if (isLock) {
+                      // Gold background & border for Lock of the Week
+                      btnColor = 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-lg ring-1 ring-amber-400/50';
                     } else {
+                      // Standard blue for regular picks
                       btnColor = 'bg-blue-600/30 border-blue-500 text-white font-bold';
                     }
                   }
@@ -322,13 +326,17 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                           className="w-6 h-6 object-contain"
                         />
                         <div className="flex flex-col items-start">
-                          <span className="text-xs font-semibold">{team.nick}</span>
+                          <span className="text-xs font-semibold flex items-center gap-1">
+                            {team.nick} {isLock && '🔒'}
+                          </span>
                           {!isChaosWeek && (
-                            <span className="text-[9px] text-gray-400">Picked {count}/6</span>
+                            <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
+                              Picked {count}/6
+                            </span>
                           )}
                         </div>
                       </div>
-                      <span className="text-[10px] text-gray-400 font-mono font-medium">
+                      <span className={`text-[10px] font-mono font-medium ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
                         {team.record || '0-0'}
                       </span>
                     </button>
@@ -340,7 +348,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         })}
       </div>
 
-      {/* Standard 6-Slot Bottom Widget (Hidden during Chaos Week) */}
+      {/* Standard 6-Slot Bottom Widget */}
       {!isChaosWeek && (
         <div className="fixed bottom-[57px] left-0 right-0 z-30 bg-gray-950/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2.5 shadow-2xl">
           <div className="max-w-md mx-auto flex flex-col gap-1.5">
