@@ -77,7 +77,7 @@ export default function Home() {
       <div className="min-h-screen bg-gray-950 text-white flex flex-col">
         <header className="bg-gray-900 border-b border-gray-800 px-4 py-3">
           <div className="max-w-3xl mx-auto flex items-center gap-2">
-            <span className="text-xl">🏈</span>
+            <img src="/pick-six-logo.png" alt="Pick Six" className="w-7 h-7 object-contain" />
             <h1 className="font-extrabold text-lg tracking-tight text-white">PICK SIX</h1>
           </div>
         </header>
@@ -95,7 +95,7 @@ export default function Home() {
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-30 px-4 py-3">
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🏈</span>
+            <img src="/pick-six-logo.png" alt="Pick Six" className="w-7 h-7 object-contain" />
             <h1 className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
               PICK SIX
             </h1>
@@ -190,6 +190,7 @@ export default function Home() {
           )
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
+            <img src="/pick-six-logo.png" alt="Pick Six Logo" className="w-16 h-16 object-contain mb-3" />
             <h2 className="text-2xl font-bold text-white mb-2">Welcome to Pick Six</h2>
             <p className="text-sm text-gray-400 max-w-sm mb-6">
               Pick 6 NFL winners each week, set your Lock of the Week, and compete on the leaderboard.
