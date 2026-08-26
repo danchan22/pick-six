@@ -20,6 +20,7 @@ export default function ProfileModal({
   const [lastName, setLastName] = useState('');
   const [teamName, setTeamName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [emailNotifications, setEmailNotifications] = useState<boolean>(true);
 
   const [rawImage, setRawImage] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -40,7 +41,7 @@ export default function ProfileModal({
   const loadUserProfile = async () => {
     const { data } = await supabase
       .from('profiles')
-      .select('first_name, last_name, team_name, avatar_url')
+      .select('first_name, last_name, team_name, avatar_url, email_notifications')
       .eq('id', userId)
       .single();
 
@@ -49,6 +50,7 @@ export default function ProfileModal({
       setLastName(data.last_name || '');
       setTeamName(data.team_name || '');
       setAvatarUrl(data.avatar_url || null);
+      setEmailNotifications(data.email_notifications !== false);
     }
   };
 
@@ -155,6 +157,7 @@ export default function ProfileModal({
           last_name: lastName.trim(),
           team_name: teamName.trim(),
           avatar_url: finalAvatarUrl,
+          email_notifications: emailNotifications,
         })
         .eq('id', userId);
 
@@ -296,10 +299,23 @@ export default function ProfileModal({
             </div>
           </div>
 
+          <div className="flex items-center gap-2.5 pt-2 border-t border-gray-800">
+            <input
+              type="checkbox"
+              id="emailNotifications"
+              checked={emailNotifications}
+              onChange={(e) => setEmailNotifications(e.target.checked)}
+              className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
+            />
+            <label htmlFor="emailNotifications" className="text-xs text-gray-300 cursor-pointer select-none font-medium">
+              Receive weekly pick reminder emails
+            </label>
+          </div>
+
           <button
             type="submit"
             disabled={saving || uploading}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-sm mt-2 transition-colors"
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-sm mt-1 transition-colors"
           >
             {saving || uploading ? 'Saving & Uploading...' : 'Save Profile'}
           </button>
