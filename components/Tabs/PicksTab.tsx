@@ -36,7 +36,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   const [games, setGames] = useState<Game[]>([]);
   const [picks, setPicks] = useState<Pick[]>([]);
   const [teamPickCounts, setTeamPickCounts] = useState<Record<string, number>>({});
-  const [forceUnlockForTesting, setForceUnlockForTesting] = useState(false);
   const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<number | null>(null);
 
   useEffect(() => {
@@ -126,7 +125,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   };
 
   const isGameLocked = (kickoffTime: string) => {
-    if (forceUnlockForTesting) return false;
     return new Date() >= new Date(kickoffTime);
   };
 
@@ -233,16 +231,9 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           </button>
         </div>
 
-        <button
-          onClick={() => setForceUnlockForTesting(!forceUnlockForTesting)}
-          className={`text-[10px] font-bold px-2.5 py-1 rounded-lg border transition-colors ${
-            forceUnlockForTesting
-              ? 'bg-amber-950 text-amber-300 border-amber-500'
-              : 'bg-gray-800 text-gray-400 border-gray-700'
-          }`}
-        >
-          {forceUnlockForTesting ? '🧪 Dev Unlocked' : 'Test Locks'}
-        </button>
+        <span className="text-[11px] font-semibold text-gray-400">
+          All Times Eastern
+        </span>
       </div>
 
       {/* Week 18 Chaos Week Banner */}
@@ -256,10 +247,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           </p>
         </div>
       )}
-
-      <div className="text-[11px] font-semibold text-gray-400 text-right px-1">
-        All Times Eastern
-      </div>
 
       {/* Matchup Schedule Cards */}
       <div className="flex flex-col gap-3">
