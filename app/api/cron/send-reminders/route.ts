@@ -27,14 +27,23 @@ export async function GET(req: NextRequest) {
     const currentWeek = activeGames?.[0]?.week || 1;
     const requiredPicks = currentWeek === 18 ? 16 : 6;
 
-    // 2. Get profiles and users' pick counts for this week
+    // 2. Fetch profiles, auth users (for emails), and picks
     const { data: profiles } = await supabaseAdmin.from('profiles').select('*');
+    const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
     const { data: weekPicks } = await supabaseAdmin
       .from('picks')
       .select('user_id')
       .eq('week', currentWeek);
 
-    if (!profiles) return NextResponse.json({ message: 'No profiles found' });
+    if (!profiles || !authData?.users) {
+      return NextResponse.json({ message: 'No profiles or auth users found' });
+    }
+
+    // Map user ID to email address
+    const emailMap: Record<string, string> = {};
+    authData.users.forEach((u) => {
+      if (u.email) emailMap[u.id] = u.email;
+    });
 
     // Count picks per user
     const userPickCounts: Record<string, number> = {};
@@ -45,14 +54,13 @@ export async function GET(req: NextRequest) {
     // 3. Filter members who still need to complete picks
     const incompleteUsers = profiles.filter((u) => {
       const count = userPickCounts[u.id] || 0;
-      return count < requiredPicks;
+      return count < requiredPicks && !!emailMap[u.id];
     });
 
     let sentCount = 0;
 
     for (const user of incompleteUsers) {
-      if (!user.email) continue;
-
+      const userEmail = emailMap[user.id];
       const userPicksDone = userPickCounts[user.id] || 0;
 
       await fetch('https://api.resend.com/emails', {
@@ -62,11 +70,11 @@ export async function GET(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'Pick Six League <reminders@picksixleague.com>',
-          to: user.email,
+          from: 'Pick Six League <onboarding@resend.dev>', // Change to reminders@picksixleague.com once domain DNS verifies
+          to: userEmail,
           subject: `🏈 Week ${currentWeek} Pick Reminder!`,
           html: `
-            <div style="font-family: sans-serif; background-color: #030712; color: #ffffff; padding: 24px; borderRadius: 12px;">
+            <div style="font-family: sans-serif; background-color: #030712; color: #ffffff; padding: 24px; border-radius: 12px;">
               <h2 style="color: #10b981; margin-bottom: 8px;">Hey ${user.first_name || 'Player'}!</h2>
               <p style="color: #d1d5db; font-size: 14px;">
                 You currently have <strong>${userPicksDone} of ${requiredPicks}</strong> picks submitted for <strong>Week ${currentWeek}</strong>.
