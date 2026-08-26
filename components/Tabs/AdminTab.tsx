@@ -4,8 +4,12 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
 
-export default function AdminTab() {
-  const [activeSubTab, setActiveTab] = useState<'schedule' | 'invites' | 'picks'>('picks');
+interface AdminTabProps {
+  currentWeek?: number;
+}
+
+export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
+  const [activeSubTab, setActiveTab] = useState<'status' | 'picks' | 'invites' | 'schedule'>('status');
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
@@ -17,23 +21,27 @@ export default function AdminTab() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
-  // Manage Picks State
+  // Manage Picks & Weekly Status State
+  const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [selectedWeek, setSelectedWeek] = useState<number>(1);
   const [weekGames, setWeekGames] = useState<any[]>([]);
   const [userPicks, setUserPicks] = useState<any[]>([]);
+  const [allWeekPicks, setAllWeekPicks] = useState<any[]>([]);
   const [adminActionStatus, setAdminActionStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (currentWeek) setSelectedWeek(currentWeek);
+  }, [currentWeek]);
 
   useEffect(() => {
     fetchProfiles();
   }, []);
 
   useEffect(() => {
-    if (activeSubTab === 'picks') {
-      fetchWeekGames();
-      if (selectedUserId) {
-        fetchUserPicks();
-      }
+    fetchWeekGames();
+    fetchAllWeekPicks();
+    if (selectedUserId) {
+      fetchUserPicks();
     }
   }, [activeSubTab, selectedWeek, selectedUserId]);
 
@@ -65,6 +73,14 @@ export default function AdminTab() {
       .eq('user_id', selectedUserId)
       .eq('week', selectedWeek);
     setUserPicks(data || []);
+  };
+
+  const fetchAllWeekPicks = async () => {
+    const { data } = await supabase
+      .from('picks')
+      .select('*, games(*)')
+      .eq('week', selectedWeek);
+    setAllWeekPicks(data || []);
   };
 
   const handleSyncSchedule = async () => {
@@ -170,6 +186,7 @@ export default function AdminTab() {
     }
 
     fetchUserPicks();
+    fetchAllWeekPicks();
   };
 
   const handleAdminToggleLock = async (pickId: string, currentLockState: boolean) => {
@@ -192,7 +209,28 @@ export default function AdminTab() {
     else setAdminActionStatus(currentLockState ? 'Lock removed' : 'Lock designated!');
 
     fetchUserPicks();
+    fetchAllWeekPicks();
   };
+
+  const requiredPicksCount = selectedWeek === 18 ? 16 : 6;
+
+  // Calculate stats for Weekly Status tab
+  const memberStatusList = profiles.map((p) => {
+    const picksForUser = allWeekPicks.filter((pick) => pick.user_id === p.id);
+    const hasLock = picksForUser.some((pick) => pick.is_lock);
+    const count = picksForUser.length;
+    const isComplete = selectedWeek === 18 ? count === 16 : count === 6 && hasLock;
+
+    return {
+      profile: p,
+      picks: picksForUser,
+      count,
+      hasLock,
+      isComplete,
+    };
+  });
+
+  const completedCount = memberStatusList.filter((m) => m.isComplete).length;
 
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
@@ -207,10 +245,18 @@ export default function AdminTab() {
       </div>
 
       {/* Subtabs Navigation */}
-      <div className="flex gap-2 border-b border-gray-800 pb-2">
+      <div className="flex gap-1.5 border-b border-gray-800 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('status')}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
+            activeSubTab === 'status' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Weekly Status
+        </button>
         <button
           onClick={() => setActiveTab('picks')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'picks' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -218,7 +264,7 @@ export default function AdminTab() {
         </button>
         <button
           onClick={() => setActiveTab('invites')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'invites' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -226,7 +272,7 @@ export default function AdminTab() {
         </button>
         <button
           onClick={() => setActiveTab('schedule')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap ${
             activeSubTab === 'schedule' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -234,7 +280,122 @@ export default function AdminTab() {
         </button>
       </div>
 
-      {/* Manage User Picks */}
+      {/* Subtab 1: Weekly Status */}
+      {activeSubTab === 'status' && (
+        <div className="flex flex-col gap-4">
+          {/* Week Selector Bar */}
+          <div className="flex justify-between items-center bg-gray-900 p-3 rounded-xl border border-gray-800">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedWeek((prev) => Math.max(1, prev - 1))}
+                disabled={selectedWeek <= 1}
+                className="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+              >
+                ◀
+              </button>
+
+              <select
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(Number(e.target.value))}
+                className="bg-gray-800 text-xs font-bold text-white px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none"
+              >
+                {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                  <option key={w} value={w}>
+                    Week {w} {w === 18 ? '(Chaos Week)' : ''}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={() => setSelectedWeek((prev) => Math.min(18, prev + 1))}
+                disabled={selectedWeek >= 18}
+                className="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+              >
+                ▶
+              </button>
+            </div>
+
+            <div className="text-right font-mono">
+              <span className="text-xs font-bold text-emerald-400 block">
+                {completedCount}/{profiles.length} Ready
+              </span>
+              <span className="text-[10px] text-gray-400">Week {selectedWeek} Submissions</span>
+            </div>
+          </div>
+
+          {/* League Roster Submission Status Cards */}
+          <div className="flex flex-col gap-2">
+            {memberStatusList.map(({ profile: p, picks, count, hasLock, isComplete }) => (
+              <div
+                key={p.id}
+                className={`p-3 rounded-xl border flex flex-col gap-2.5 transition-all ${
+                  isComplete
+                    ? 'bg-emerald-950/20 border-emerald-500/50'
+                    : 'bg-red-950/20 border-red-500/50'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center font-bold text-xs overflow-hidden">
+                      {p.avatar_url ? (
+                        <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        `${p.first_name?.slice(0, 1) || ''}${p.last_name?.slice(0, 1) || ''}`
+                      )}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-xs text-white flex items-center gap-1">
+                        {p.team_name} {p.championships && '🏆'}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        {p.first_name} {p.last_name}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
+                        isComplete
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                          : 'bg-red-500/20 text-red-300 border-red-500/40'
+                      }`}
+                    >
+                      {count}/{requiredPicksCount} Picks {isComplete ? '✓' : '⚠️'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Pick Preview Row */}
+                {picks.length > 0 && (
+                  <div className="flex items-center gap-1.5 border-t border-gray-800/80 pt-2 overflow-x-auto">
+                    {picks.map((pick) => (
+                      <div
+                        key={pick.id}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] whitespace-nowrap ${
+                          pick.is_lock
+                            ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold'
+                            : 'bg-gray-800/80 border-gray-700 text-gray-300'
+                        }`}
+                      >
+                        <img
+                          src={getTeamLogoUrl(pick.selected_team)}
+                          alt=""
+                          className="w-3.5 h-3.5 object-contain"
+                        />
+                        <span>{getTeamNickname(pick.selected_team)}</span>
+                        {pick.is_lock && <span className="text-[8px]">🔒</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Subtab 2: Manage User Picks */}
       {activeSubTab === 'picks' && (
         <div className="flex flex-col gap-4">
           <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-3">
@@ -367,7 +528,7 @@ export default function AdminTab() {
         </div>
       )}
 
-      {/* Invites & Roster */}
+      {/* Subtab 3: Invites & Roster */}
       {activeSubTab === 'invites' && (
         <div className="flex flex-col gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
@@ -452,7 +613,7 @@ export default function AdminTab() {
         </div>
       )}
 
-      {/* Schedule Sync */}
+      {/* Subtab 4: Schedule Sync */}
       {activeSubTab === 'schedule' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
           <div>
