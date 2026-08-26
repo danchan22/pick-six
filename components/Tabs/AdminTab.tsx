@@ -2,28 +2,69 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
 
 export default function AdminTab() {
-  const [activeSubTab, setActiveTab] = useState<'schedule' | 'invites'>('schedule');
+  const [activeSubTab, setActiveTab] = useState<'schedule' | 'invites' | 'picks'>('picks');
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  // Invites State
+  // User Roster State
   const [profiles, setProfiles] = useState<any[]>([]);
+  
+  // Invites State
   const [inviteEmail, setInviteEmail] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
+
+  // Manage Picks State
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedWeek, setSelectedWeek] = useState<number>(1);
+  const [weekGames, setWeekGames] = useState<any[]>([]);
+  const [userPicks, setUserPicks] = useState<any[]>([]);
+  const [adminActionStatus, setAdminActionStatus] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProfiles();
   }, []);
 
+  useEffect(() => {
+    if (activeSubTab === 'picks') {
+      fetchWeekGames();
+      if (selectedUserId) {
+        fetchUserPicks();
+      }
+    }
+  }, [activeSubTab, selectedWeek, selectedUserId]);
+
   const fetchProfiles = async () => {
     const { data } = await supabase
       .from('profiles')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('first_name', { ascending: true });
+    
     setProfiles(data || []);
+    if (data && data.length > 0 && !selectedUserId) {
+      setSelectedUserId(data[0].id);
+    }
+  };
+
+  const fetchWeekGames = async () => {
+    const { data } = await supabase
+      .from('games')
+      .select('*')
+      .eq('week', selectedWeek)
+      .order('kickoff_time', { ascending: true });
+    setWeekGames(data || []);
+  };
+
+  const fetchUserPicks = async () => {
+    const { data } = await supabase
+      .from('picks')
+      .select('*, games(*)')
+      .eq('user_id', selectedUserId)
+      .eq('week', selectedWeek);
+    setUserPicks(data || []);
   };
 
   const handleSyncSchedule = async () => {
@@ -64,12 +105,96 @@ export default function AdminTab() {
     setInviteEmail('');
   };
 
+  // Admin Override Pick Selection
+  const handleAdminSelectTeam = async (gameId: string, team: string) => {
+    if (!selectedUserId) return;
+    setAdminActionStatus(null);
+
+    const existingPick = userPicks.find((p) => p.game_id === gameId);
+
+    if (existingPick?.selected_team === team) {
+      // Remove pick
+      const { error } = await supabase.from('picks').delete().eq('id', existingPick.id);
+      if (error) setAdminActionStatus(`Error: ${error.message}`);
+      else setAdminActionStatus(`Removed pick for ${getTeamNickname(team)}`);
+    } else if (existingPick) {
+      // Update team on existing pick
+      const { error } = await supabase
+        .from('picks')
+        .update({ selected_team: team })
+        .eq('id', existingPick.id);
+      if (error) setAdminActionStatus(`Error: ${error.message}`);
+      else setAdminActionStatus(`Updated pick to ${getTeamNickname(team)}`);
+    } else {
+      // Insert new pick
+      if (selectedWeek !== 18 && userPicks.length >= 6) {
+        setAdminActionStatus('User already has 6 picks for this week.');
+        return;
+      }
+
+      const hasLock = userPicks.some((p) => p.is_lock);
+      const isLock = selectedWeek !== 18 && !hasLock && userPicks.length === 5;
+
+      const { error } = await supabase.from('picks').insert({
+        user_id: selectedUserId,
+        game_id: gameId,
+        week: selectedWeek,
+        selected_team: team,
+        is_lock: isLock,
+      });
+
+      if (error) setAdminActionStatus(`Error: ${error.message}`);
+      else setAdminActionStatus(`Added pick for ${getTeamNickname(team)}`);
+    }
+
+    fetchUserPicks();
+  };
+
+  const handleAdminToggleLock = async (pickId: string, currentLockState: boolean) => {
+    setAdminActionStatus(null);
+
+    if (!currentLockState) {
+      // Unset any existing lock for this user and week first
+      await supabase
+        .from('picks')
+        .update({ is_lock: false })
+        .eq('user_id', selectedUserId)
+        .eq('week', selectedWeek);
+    }
+
+    const { error } = await supabase
+      .from('picks')
+      .update({ is_lock: !currentLockState })
+      .eq('id', pickId);
+
+    if (error) setAdminActionStatus(`Error: ${error.message}`);
+    else setAdminActionStatus(currentLockState ? 'Lock removed' : 'Lock designated!');
+
+    fetchUserPicks();
+  };
+
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
       <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
 
-      {/* Admin Subtabs */}
+      {/* Subtabs Navigation */}
       <div className="flex gap-2 border-b border-gray-800 pb-2">
+        <button
+          onClick={() => setActiveTab('picks')}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+            activeSubTab === 'picks' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Manage Picks
+        </button>
+        <button
+          onClick={() => setActiveTab('invites')}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+            activeSubTab === 'invites' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Invites & Roster
+        </button>
         <button
           onClick={() => setActiveTab('schedule')}
           className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
@@ -78,48 +203,146 @@ export default function AdminTab() {
         >
           Schedule Sync
         </button>
-        <button
-          onClick={() => setActiveTab('invites')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
-            activeSubTab === 'invites' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
-          }`}
-        >
-          League Invites
-        </button>
       </div>
 
-      {activeSubTab === 'schedule' ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
-          <div>
-            <h3 className="font-bold text-sm text-emerald-400">Sync NFL Matchups & Scores</h3>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Pull the latest NFL schedule, team W-L records, and final game scores from ESPN into Supabase.
+      {/* Subtab 1: Manage User Picks */}
+      {activeSubTab === 'picks' && (
+        <div className="flex flex-col gap-4">
+          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-3">
+            <h3 className="text-sm font-bold text-emerald-400">Override / Edit User Picks</h3>
+            <p className="text-xs text-gray-400">
+              Select a member and a week to view or alter their submitted picks directly.
             </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-gray-400 block mb-1">Select User</label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full bg-gray-800 text-xs font-bold text-white p-2 rounded-lg border border-gray-700 focus:outline-none"
+                >
+                  {profiles.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.team_name} ({p.first_name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-400 block mb-1">Select Week</label>
+                <select
+                  value={selectedWeek}
+                  onChange={(e) => setSelectedWeek(Number(e.target.value))}
+                  className="w-full bg-gray-800 text-xs font-bold text-white p-2 rounded-lg border border-gray-700 focus:outline-none"
+                >
+                  {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
+                    <option key={w} value={w}>
+                      Week {w}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {adminActionStatus && (
+              <p className="text-xs font-mono bg-gray-800 text-emerald-400 p-2 rounded border border-gray-700">
+                {adminActionStatus}
+              </p>
+            )}
           </div>
 
-          {syncMessage && (
-            <div
-              className={`p-3 rounded-lg text-xs font-mono ${
-                syncMessage.startsWith('Error')
-                  ? 'bg-red-950 text-red-200 border border-red-500/50'
-                  : 'bg-emerald-950 text-emerald-200 border border-emerald-500/50'
-              }`}
-            >
-              {syncMessage}
+          {/* Current Picks Summary & Lock Manager */}
+          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-2">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-2">
+              <span className="text-xs font-bold text-white">Current Submissions</span>
+              <span className="text-[10px] font-mono text-emerald-400">
+                {userPicks.length}/{selectedWeek === 18 ? '16' : '6'} Picks
+              </span>
             </div>
-          )}
 
-          <button
-            onClick={handleSyncSchedule}
-            disabled={syncing}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 font-bold py-2.5 px-4 rounded-lg text-xs transition-colors self-start"
-          >
-            {syncing ? 'Syncing Weeks 1-18...' : 'Sync Schedule Now'}
-          </button>
+            <div className="flex flex-col gap-1.5 mt-1">
+              {userPicks.length === 0 ? (
+                <p className="text-xs text-gray-500 py-2 text-center">No picks found for this week.</p>
+              ) : (
+                userPicks.map((pick) => (
+                  <div
+                    key={pick.id}
+                    className={`p-2 rounded-lg border flex items-center justify-between text-xs ${
+                      pick.is_lock
+                        ? 'bg-amber-950/30 border-amber-500/60 text-amber-300'
+                        : 'bg-gray-800/80 border-gray-700/80 text-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <img src={getTeamLogoUrl(pick.selected_team)} alt="" className="w-5 h-5 object-contain" />
+                      <span className="font-bold">{getTeamNickname(pick.selected_team)}</span>
+                    </div>
+
+                    {selectedWeek !== 18 && (
+                      <button
+                        onClick={() => handleAdminToggleLock(pick.id, pick.is_lock)}
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors ${
+                          pick.is_lock
+                            ? 'bg-amber-500 text-black border-amber-400'
+                            : 'bg-gray-700 text-gray-400 border-gray-600 hover:text-white'
+                        }`}
+                      >
+                        {pick.is_lock ? '🔒 LOCK' : 'Set Lock'}
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Matchups Board for Quick Toggling */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-bold text-gray-400 px-1">Week {selectedWeek} Matchup Board</span>
+            {weekGames.map((game) => {
+              const currentPick = userPicks.find((p) => p.game_id === game.id);
+
+              return (
+                <div key={game.id} className="bg-gray-900 border border-gray-800 p-2.5 rounded-xl flex flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    {[game.away_team, game.home_team].map((team) => {
+                      const isSelected = currentPick?.selected_team === team;
+                      const isLock = isSelected && currentPick?.is_lock;
+
+                      let colorClass = 'bg-gray-800 text-gray-300 border-gray-700';
+                      if (isSelected) {
+                        colorClass = isLock
+                          ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold'
+                          : 'bg-blue-600/30 border-blue-500 text-white font-bold';
+                      }
+
+                      return (
+                        <button
+                          key={team}
+                          onClick={() => handleAdminSelectTeam(game.id, team)}
+                          className={`p-2 rounded-lg border text-xs flex items-center justify-between transition-colors ${colorClass}`}
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <img src={getTeamLogoUrl(team)} alt="" className="w-5 h-5 object-contain" />
+                            <span className="truncate">{getTeamNickname(team)}</span>
+                          </div>
+                          {isSelected && <span className="text-[10px] font-bold">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
-      ) : (
+      )}
+
+      {/* Subtab 2: Invites & Roster */}
+      {activeSubTab === 'invites' && (
         <div className="flex flex-col gap-4">
-          {/* Shareable Invite Link Card */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
             <h3 className="font-bold text-sm text-emerald-400">Copy League Invite Link</h3>
             <p className="text-xs text-gray-400">
@@ -137,7 +360,6 @@ export default function AdminTab() {
             </button>
           </div>
 
-          {/* Direct Email Invite Card */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
             <h3 className="font-bold text-sm text-emerald-400">Send Direct Email Invite</h3>
 
@@ -165,7 +387,6 @@ export default function AdminTab() {
             </form>
           </div>
 
-          {/* Current Roster Table */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
             <div className="flex justify-between items-center">
               <h3 className="font-bold text-sm text-white">Joined Roster ({profiles.length})</h3>
@@ -201,6 +422,38 @@ export default function AdminTab() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Subtab 3: Schedule Sync */}
+      {activeSubTab === 'schedule' && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+          <div>
+            <h3 className="font-bold text-sm text-emerald-400">Sync NFL Matchups & Scores</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Pull the latest NFL schedule, team W-L records, and final game scores from ESPN into Supabase.
+            </p>
+          </div>
+
+          {syncMessage && (
+            <div
+              className={`p-3 rounded-lg text-xs font-mono ${
+                syncMessage.startsWith('Error')
+                  ? 'bg-red-950 text-red-200 border border-red-500/50'
+                  : 'bg-emerald-950 text-emerald-200 border border-emerald-500/50'
+              }`}
+            >
+              {syncMessage}
+            </div>
+          )}
+
+          <button
+            onClick={handleSyncSchedule}
+            disabled={syncing}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 font-bold py-2.5 px-4 rounded-lg text-xs transition-colors self-start"
+          >
+            {syncing ? 'Syncing Weeks 1-18...' : 'Sync Schedule Now'}
+          </button>
         </div>
       )}
     </div>
