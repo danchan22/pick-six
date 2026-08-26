@@ -11,7 +11,7 @@ export default function AdminTab() {
 
   // User Roster State
   const [profiles, setProfiles] = useState<any[]>([]);
-  
+
   // Invites State
   const [inviteEmail, setInviteEmail] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
@@ -42,7 +42,7 @@ export default function AdminTab() {
       .from('profiles')
       .select('*')
       .order('first_name', { ascending: true });
-    
+
     setProfiles(data || []);
     if (data && data.length > 0 && !selectedUserId) {
       setSelectedUserId(data[0].id);
@@ -103,6 +103,32 @@ export default function AdminTab() {
 
     setInviteStatus(`Opened email client to send invite to ${inviteEmail}`);
     setInviteEmail('');
+  };
+
+  const handleExportCSV = async () => {
+    const { data: picks } = await supabase.from('picks').select('*, games(*), profiles(*)');
+    if (!picks || picks.length === 0) return alert('No pick data available to export.');
+
+    const headers = ['User Name', 'Team Name', 'Week', 'Selected Team', 'Is Lock', 'Points Awarded', 'Kickoff Time'];
+    const rows = picks.map((p) => [
+      `"${p.profiles?.first_name || ''} ${p.profiles?.last_name || ''}"`,
+      `"${p.profiles?.team_name || ''}"`,
+      p.week,
+      `"${p.selected_team}"`,
+      p.is_lock ? 'YES' : 'NO',
+      p.points_awarded ?? 0,
+      `"${p.games?.kickoff_time || ''}"`,
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Pick_Six_Season_Export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleAdminSelectTeam = async (gameId: string, team: string) => {
@@ -170,7 +196,15 @@ export default function AdminTab() {
 
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
+        <button
+          onClick={handleExportCSV}
+          className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
+        >
+          <span>📥</span> Export CSV
+        </button>
+      </div>
 
       {/* Subtabs Navigation */}
       <div className="flex gap-2 border-b border-gray-800 pb-2">
