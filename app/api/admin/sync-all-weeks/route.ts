@@ -5,8 +5,11 @@ async function syncSchedule() {
   const seasonYear = 2026;
   let totalImported = 0;
 
+  // Clear existing games to prevent lingering preseason duplicates
+  await supabaseAdmin.from('picks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabaseAdmin.from('games').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
   for (let w = 1; w <= 18; w++) {
-    // Explicitly query seasontype=2 for regular season games
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${seasonYear}&seasontype=2&week=${w}`,
       { cache: 'no-store' }
