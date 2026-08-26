@@ -9,151 +9,211 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [teamName, setTeamName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(null);
+    setErrorMsg(null);
+    setSuccessMsg(null);
 
-    try {
-      if (isSignUp) {
-        const { data: codeData, error: codeErr } = await supabase
-          .from('invite_codes')
-          .select('*')
-          .eq('code', inviteCode.trim().toUpperCase())
-          .eq('is_active', true)
-          .single();
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}`,
+    });
 
-        if (codeErr || !codeData) {
-          throw new Error('Invalid or inactive invite code.');
-        }
-
-        // Default team name to "Team [FIRST_NAME]"
-        const defaultTeamName = `Team ${firstName.trim()}`;
-
-        const { error: signUpErr } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              first_name: firstName.trim(),
-              last_name: lastName.trim(),
-              team_name: defaultTeamName,
-            },
-          },
-        });
-
-        if (signUpErr) throw signUpErr;
-      } else {
-        const { error: signInErr } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (signInErr) throw signInErr;
-      }
-
-      onSuccess();
-    } catch (err: any) {
-      console.error('Auth Error:', err);
-      setError(err.message || 'Authentication failed.');
-    } finally {
-      setLoading(false);
+    if (error) {
+      setErrorMsg(error.message);
+    } else {
+      setSuccessMsg('Password reset link sent! Check your email inbox.');
     }
+    setLoading(false);
+  };
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg(null);
+
+    if (mode === 'login') {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) setErrorMsg(error.message);
+      else onSuccess();
+    } else {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        setErrorMsg(error.message);
+      } else if (data.user) {
+        await supabase.from('profiles').insert({
+          id: data.user.id,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          team_name: teamName.trim(),
+        });
+        onSuccess();
+      }
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl">
-        <h2 className="text-xl font-bold text-white text-center mb-1">
-          {isSignUp ? 'Join Pick Six League' : 'Sign In'}
-        </h2>
-        <p className="text-xs text-gray-400 text-center mb-6">
-          {isSignUp ? 'Invite code required to register' : 'Manage your weekly NFL picks'}
-        </p>
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4">
+        <div className="text-center">
+          <h2 className="text-xl font-extrabold text-white">
+            {mode === 'login' ? 'Welcome Back' : mode === 'signup' ? 'Join Pick Six' : 'Reset Password'}
+          </h2>
+          <p className="text-xs text-gray-400 mt-1">
+            {mode === 'forgot'
+              ? 'Enter your email to receive a password reset link.'
+              : 'Enter your credentials to continue.'}
+          </p>
+        </div>
 
-        {error && (
-          <div className="bg-red-950/80 border border-red-500/50 text-red-200 text-xs p-3 rounded-lg mb-4">
-            {error}
+        {errorMsg && (
+          <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/50 text-red-200 text-xs font-medium">
+            {errorMsg}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {isSignUp && (
-            <>
+        {successMsg && (
+          <div className="p-2.5 rounded-lg bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs font-medium">
+            {successMsg}
+          </div>
+        )}
+
+        {mode === 'forgot' ? (
+          <form onSubmit={handleResetPassword} className="flex flex-col gap-3">
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1">Email</label>
               <input
-                type="text"
-                placeholder="League Invite Code"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value)}
+                type="email"
                 required
-                className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
               />
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="text"
-                  placeholder="First Name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Last Name"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                  className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
-                />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-xs transition-colors mt-1"
+            >
+              {loading ? 'Sending Link...' : 'Send Reset Link'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className="text-xs text-gray-400 hover:text-white mt-2 text-center"
+            >
+              ← Back to Sign In
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleAuth} className="flex flex-col gap-3">
+            {mode === 'signup' && (
+              <>
+                <div>
+                  <label className="text-[11px] text-gray-400 block mb-1">Team Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={teamName}
+                    onChange={(e) => setTeamName(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1">First Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-gray-400 block mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1">Email</label>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-[11px] text-gray-400">Password</label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('forgot')}
+                    className="text-[10px] text-emerald-400 hover:underline"
+                  >
+                    Forgot?
+                  </button>
+                )}
               </div>
-            </>
-          )}
+              <input
+                type="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
+              />
+            </div>
 
-          <input
-            type="email"
-            placeholder="Email Address"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-emerald-500"
-          />
+            <button
+              type="submit"
+              disabled={loading}
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-xs transition-colors mt-2"
+            >
+              {loading ? 'Processing...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            </button>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-lg text-sm transition-colors shadow-lg shadow-emerald-950"
-          >
-            {loading ? 'Processing...' : isSignUp ? 'Register' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-xs text-gray-400 hover:text-white transition-colors"
-          >
-            {isSignUp ? 'Already have an account? Sign In' : 'Have an invite code? Register'}
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
+              className="text-xs text-gray-400 hover:text-white mt-1 text-center"
+            >
+              {mode === 'login' ? "Don't have an account? Sign Up" : 'Already have an account? Sign In'}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );
