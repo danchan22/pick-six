@@ -4,270 +4,203 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function AdminTab() {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'add_picks' | 'sync' | 'invites'>('users');
-  const [users, setUsers] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [selectedWeek, setSelectedWeek] = useState<number>(1);
-  const [games, setGames] = useState<any[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<string>('');
-  const [selectedGameId, setSelectedGameId] = useState<string>('');
-  const [isLock, setIsLock] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [syncProgress, setSyncProgress] = useState<string>('');
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [activeSubTab, setActiveTab] = useState<'schedule' | 'invites'>('schedule');
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Invites State
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchUsers();
+    fetchProfiles();
   }, []);
 
-  useEffect(() => {
-    fetchWeekGames();
-  }, [selectedWeek]);
-
-  const fetchUsers = async () => {
-    const { data } = await supabase.from('profiles').select('*');
-    setUsers(data || []);
-  };
-
-  const fetchWeekGames = async () => {
-    const { data } = await supabase.from('games').select('*').eq('week', selectedWeek);
-    setGames(data || []);
-  };
-
-  const handleUpdateUserProfile = async (userId: string, teamName: string, firstName: string, lastName: string) => {
-    const { error } = await supabase
+  const fetchProfiles = async () => {
+    const { data } = await supabase
       .from('profiles')
-      .update({ team_name: teamName, first_name: firstName, last_name: lastName })
-      .eq('id', userId);
-
-    if (error) setMessage({ type: 'error', text: error.message });
-    else {
-      setMessage({ type: 'success', text: 'User info updated!' });
-      fetchUsers();
-    }
+      .select('*')
+      .order('created_at', { ascending: false });
+    setProfiles(data || []);
   };
 
-  const handleAdminAddPick = async () => {
-    if (!selectedUser || !selectedGameId || !selectedTeam) return;
-
-    const { error } = await supabase.from('picks').insert({
-      user_id: selectedUser.id,
-      game_id: selectedGameId,
-      week: selectedWeek,
-      selected_team: selectedTeam,
-      is_lock: isLock,
-    });
-
-    if (error) setMessage({ type: 'error', text: error.message });
-    else setMessage({ type: 'success', text: `Pick added for ${selectedUser.team_name}!` });
-  };
-
-  const handleSyncAllWeeks = async () => {
-    setLoading(true);
-    setMessage(null);
-    setSyncProgress('Syncing all 18 weeks on the server... please wait a few seconds.');
+  const handleSyncSchedule = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
 
     try {
-      const res = await fetch('/api/admin/sync-all-weeks', {
-        method: 'POST',
-      });
-
+      const res = await fetch('/api/admin/sync-all-weeks', { method: 'POST' });
       const data = await res.json();
 
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to sync schedule.');
-      }
-
-      setMessage({
-        type: 'success',
-        text: data.message,
-      });
-      fetchWeekGames();
+      if (!res.ok) throw new Error(data.error || 'Failed to sync');
+      setSyncMessage(data.message || 'Schedule synced successfully!');
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message });
+      setSyncMessage(`Error: ${err.message}`);
     } finally {
-      setLoading(false);
-      setSyncProgress('');
+      setSyncing(false);
     }
+  };
+
+  const handleCopyInviteLink = () => {
+    const inviteUrl = `${window.location.origin}`;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleSendInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail.trim()) return;
+
+    const subject = encodeURIComponent('Join our Pick Six NFL League!');
+    const body = encodeURIComponent(
+      `Hey! You've been invited to join our Pick Six NFL league.\n\nClick here to register and set up your team:\n${window.location.origin}`
+    );
+    window.location.href = `mailto:${inviteEmail}?subject=${subject}&body=${body}`;
+
+    setInviteStatus(`Opened email client to send invite to ${inviteEmail}`);
+    setInviteEmail('');
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <h2 className="text-xl font-bold">League Admin Control</h2>
+    <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
+      <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
 
-      {message && (
-        <div
-          className={`p-2.5 rounded-lg text-xs border ${
-            message.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200'
-              : 'bg-red-950/80 border-red-500 text-red-200'
+      {/* Admin Subtabs */}
+      <div className="flex gap-2 border-b border-gray-800 pb-2">
+        <button
+          onClick={() => setActiveTab('schedule')}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+            activeSubTab === 'schedule' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
-          {message.text}
-        </div>
-      )}
-
-      {/* Sub tabs */}
-      <div className="flex gap-2 border-b border-gray-800 pb-2 overflow-x-auto">
-        {(['users', 'add_picks', 'sync', 'invites'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveSubTab(tab)}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg capitalize whitespace-nowrap ${
-              activeSubTab === tab ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            {tab === 'sync' ? 'Sync Schedule' : tab.replace('_', ' ')}
-          </button>
-        ))}
+          Schedule Sync
+        </button>
+        <button
+          onClick={() => setActiveTab('invites')}
+          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+            activeSubTab === 'invites' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          League Invites
+        </button>
       </div>
 
-      {/* Edit User Info */}
-      {activeSubTab === 'users' && (
-        <div className="flex flex-col gap-3">
-          {users.map((u) => (
-            <div key={u.id} className="bg-gray-900 border border-gray-800 p-3 rounded-xl flex flex-col gap-2">
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <label className="text-[10px] text-gray-500 block">Team</label>
-                  <input
-                    type="text"
-                    defaultValue={u.team_name}
-                    onBlur={(e) => (u.team_name = e.target.value)}
-                    className="w-full bg-gray-800 p-1.5 rounded border border-gray-700 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-500 block">First</label>
-                  <input
-                    type="text"
-                    defaultValue={u.first_name}
-                    onBlur={(e) => (u.first_name = e.target.value)}
-                    className="w-full bg-gray-800 p-1.5 rounded border border-gray-700 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-gray-500 block">Last</label>
-                  <input
-                    type="text"
-                    defaultValue={u.last_name}
-                    onBlur={(e) => (u.last_name = e.target.value)}
-                    className="w-full bg-gray-800 p-1.5 rounded border border-gray-700 text-white"
-                  />
-                </div>
-              </div>
-              <button
-                onClick={() => handleUpdateUserProfile(u.id, u.team_name, u.first_name, u.last_name)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold py-1.5 rounded text-white transition-colors"
-              >
-                Save Changes
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+      {activeSubTab === 'schedule' ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+          <div>
+            <h3 className="font-bold text-sm text-emerald-400">Sync NFL Matchups & Scores</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Pull the latest NFL schedule, team W-L records, and final game scores from ESPN into Supabase.
+            </p>
+          </div>
 
-      {/* Admin Add Picks for Users */}
-      {activeSubTab === 'add_picks' && (
-        <div className="flex flex-col gap-3 bg-gray-900 border border-gray-800 p-4 rounded-xl">
-          <label className="text-xs text-gray-400">Select User</label>
-          <select
-            onChange={(e) => setSelectedUser(users.find((u) => u.id === e.target.value))}
-            className="bg-gray-800 text-xs p-2 rounded-lg text-white border border-gray-700"
-          >
-            <option value="">Select Member</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.team_name} ({u.first_name})
-              </option>
-            ))}
-          </select>
-
-          <label className="text-xs text-gray-400">Select Week</label>
-          <select
-            value={selectedWeek}
-            onChange={(e) => setSelectedWeek(Number(e.target.value))}
-            className="bg-gray-800 text-xs p-2 rounded-lg text-white border border-gray-700"
-          >
-            {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
-              <option key={w} value={w}>
-                Week {w}
-              </option>
-            ))}
-          </select>
-
-          <label className="text-xs text-gray-400">Select Game</label>
-          <select
-            onChange={(e) => {
-              setSelectedGameId(e.target.value);
-              const g = games.find((item) => item.id === e.target.value);
-              if (g) setSelectedTeam(g.home_team);
-            }}
-            className="bg-gray-800 text-xs p-2 rounded-lg text-white border border-gray-700"
-          >
-            <option value="">Select Matchup</option>
-            {games.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.away_team} @ {g.home_team}
-              </option>
-            ))}
-          </select>
-
-          {selectedGameId && (
-            <div className="flex items-center gap-4 py-2">
-              <label className="text-xs text-gray-400">Team:</label>
-              <select
-                value={selectedTeam}
-                onChange={(e) => setSelectedTeam(e.target.value)}
-                className="bg-gray-800 text-xs p-2 rounded-lg text-white border border-gray-700"
-              >
-                {games
-                  .filter((g) => g.id === selectedGameId)
-                  .map((g) => (
-                    <div key={g.id}>
-                      <option value={g.away_team}>{g.away_team}</option>
-                      <option value={g.home_team}>{g.home_team}</option>
-                    </div>
-                  ))}
-              </select>
-
-              <label className="flex items-center gap-1.5 text-xs text-amber-400 font-bold">
-                <input
-                  type="checkbox"
-                  checked={isLock}
-                  onChange={(e) => setIsLock(e.target.checked)}
-                />
-                Lock?
-              </label>
+          {syncMessage && (
+            <div
+              className={`p-3 rounded-lg text-xs font-mono ${
+                syncMessage.startsWith('Error')
+                  ? 'bg-red-950 text-red-200 border border-red-500/50'
+                  : 'bg-emerald-950 text-emerald-200 border border-emerald-500/50'
+              }`}
+            >
+              {syncMessage}
             </div>
           )}
 
           <button
-            onClick={handleAdminAddPick}
-            className="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold py-2 rounded-lg text-white mt-2 transition-colors"
+            onClick={handleSyncSchedule}
+            disabled={syncing}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 font-bold py-2.5 px-4 rounded-lg text-xs transition-colors self-start"
           >
-            Force Add Pick
+            {syncing ? 'Syncing Weeks 1-18...' : 'Sync Schedule Now'}
           </button>
         </div>
-      )}
+      ) : (
+        <div className="flex flex-col gap-4">
+          {/* Shareable Invite Link Card */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
+            <h3 className="font-bold text-sm text-emerald-400">Copy League Invite Link</h3>
+            <p className="text-xs text-gray-400">
+              Share this link directly with league members so they can sign up and create their profile.
+            </p>
 
-      {/* Sync All Weeks */}
-      {activeSubTab === 'sync' && (
-        <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-white">Import Full 18-Week Schedule</h3>
-          <p className="text-xs text-gray-400">
-            Fetch all 18 weeks of NFL matchups from ESPN into your Supabase database so players can view and pick future weeks.
-          </p>
+            <button
+              onClick={handleCopyInviteLink}
+              className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-2.5 px-4 rounded-lg flex items-center justify-between transition-colors mt-1"
+            >
+              <span className="truncate font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}</span>
+              <span className="text-[11px] bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/40 text-emerald-300">
+                {copiedLink ? '✓ Copied!' : 'Copy Link'}
+              </span>
+            </button>
+          </div>
 
-          {syncProgress && <p className="text-xs text-amber-400 font-mono">{syncProgress}</p>}
+          {/* Direct Email Invite Card */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+            <h3 className="font-bold text-sm text-emerald-400">Send Direct Email Invite</h3>
 
-          <button
-            onClick={handleSyncAllWeeks}
-            disabled={loading}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-xs font-bold py-2.5 rounded-lg text-white transition-colors"
-          >
-            {loading ? 'Syncing Schedule...' : 'Import All 18 Weeks Now'}
-          </button>
+            {inviteStatus && (
+              <p className="text-xs text-emerald-400 font-mono bg-emerald-950/60 p-2 rounded border border-emerald-500/40">
+                {inviteStatus}
+              </p>
+            )}
+
+            <form onSubmit={handleSendInvite} className="flex gap-2">
+              <input
+                type="email"
+                placeholder="friend@example.com"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              />
+              <button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-500 text-xs font-bold px-4 py-2 rounded-lg transition-colors"
+              >
+                Invite
+              </button>
+            </form>
+          </div>
+
+          {/* Current Roster Table */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-sm text-white">Joined Roster ({profiles.length})</h3>
+              <span className="text-[10px] text-emerald-400 font-mono font-bold">Active League</span>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              {profiles.map((p) => (
+                <div
+                  key={p.id}
+                  className="bg-gray-800/80 p-2.5 rounded-lg flex justify-between items-center text-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-[10px] overflow-hidden">
+                      {p.avatar_url ? (
+                        <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        `${p.first_name?.slice(0, 1) || ''}${p.last_name?.slice(0, 1) || ''}`
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-bold text-white block">{p.team_name}</span>
+                      <span className="text-[10px] text-gray-400">
+                        {p.first_name} {p.last_name}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] text-gray-400 font-mono">
+                    Joined {new Date(p.created_at || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
