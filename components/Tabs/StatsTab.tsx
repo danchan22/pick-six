@@ -21,8 +21,8 @@ export default function StatsTab() {
   const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('perfection');
   const [profiles, setProfiles] = useState<any[]>([]);
   const [allPicks, setAllPicks] = useState<any[]>([]);
+  const [gamesMap, setGamesMap] = useState<Record<string, any>>({});
 
-  // Sorting state for Popular subtab
   const [sortField, setSortField] = useState<SortField>('timesPicked');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
 
@@ -33,9 +33,16 @@ export default function StatsTab() {
   const fetchStatsData = async () => {
     const { data: profs } = await supabase.from('profiles').select('*');
     const { data: picksData } = await supabase.from('picks').select('*, games(*)');
+    const { data: gamesData } = await supabase.from('games').select('*');
+
+    const gMap: Record<string, any> = {};
+    (gamesData || []).forEach((g) => {
+      gMap[g.id] = g;
+    });
 
     setProfiles(profs || []);
     setAllPicks(picksData || []);
+    setGamesMap(gMap);
   };
 
   const handleSort = (field: SortField) => {
@@ -71,7 +78,7 @@ export default function StatsTab() {
     (a, b) => (userPerfectWeeks[b.id] || 0) - (userPerfectWeeks[a.id] || 0)
   );
 
-  // Popular Calculations & Interactive Sorting
+  // Popular Calculations with Team Records
   const teamPopularStats = ALL_NFL_TEAMS.map((teamFullName) => {
     const teamPicks = allPicks.filter((p) => p.selected_team === teamFullName);
     const timesPicked = teamPicks.length;
@@ -83,9 +90,20 @@ export default function StatsTab() {
     });
     const maxedOutCount = Object.values(userCounts).filter((cnt) => cnt >= 6).length;
 
+    // Get team record from latest game
+    const teamGames = Object.values(gamesMap).filter(
+      (g) => g.home_team === teamFullName || g.away_team === teamFullName
+    );
+    const latestGame = teamGames[teamGames.length - 1];
+    let record = '0-0';
+    if (latestGame) {
+      record = latestGame.home_team === teamFullName ? (latestGame.home_record || '0-0') : (latestGame.away_record || '0-0');
+    }
+
     return {
       teamFullName,
       teamNick: getTeamNickname(teamFullName),
+      record,
       timesPicked,
       timesLotw,
       maxedOutCount,
@@ -156,7 +174,6 @@ export default function StatsTab() {
             </div>
           </div>
 
-          {/* Oops, all losses! */}
           <div className="bg-red-950/30 border border-red-500/50 p-4 rounded-xl flex flex-col gap-3">
             <h3 className="text-sm font-bold text-red-400 flex items-center gap-1.5">
               <span>🚨</span> Oops, all losses!
@@ -192,7 +209,7 @@ export default function StatsTab() {
         </div>
       )}
 
-      {/* Subtab 2: Popular (Sortable with Fixed Column Widths) */}
+      {/* Subtab 2: Popular */}
       {subTab === 'popular' && (
         <div className="flex flex-col gap-2">
           <div className="bg-gray-900 border border-gray-800 p-3 rounded-xl text-xs flex justify-between items-center font-bold text-gray-400 select-none">
@@ -232,7 +249,9 @@ export default function StatsTab() {
             >
               <div className="flex items-center gap-2 min-w-0 pr-2">
                 <img src={getTeamLogoUrl(item.teamFullName)} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
-                <span className="font-bold text-white truncate">{item.teamNick}</span>
+                <span className="font-bold text-white truncate">
+                  {item.teamNick} <span className="text-gray-400 font-normal font-mono text-[11px]">({item.record})</span>
+                </span>
               </div>
 
               <div className="flex gap-2 font-mono font-bold text-right text-xs flex-shrink-0">
