@@ -186,7 +186,7 @@ export default function Home() {
           ) : activeTab === 'rules' ? (
             <RulesTab />
           ) : (
-            <AdminTab />
+            <AdminTab currentWeek={currentWeek} />
           )
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
