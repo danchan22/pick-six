@@ -75,7 +75,12 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
       <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col gap-4">
-        <div className="text-center">
+        <div className="text-center flex flex-col items-center">
+          <img
+            src="/pick-six-logo.png"
+            alt="Pick Six Logo"
+            className="w-14 h-14 object-contain mb-2"
+          />
           <h2 className="text-xl font-extrabold text-white">
             {mode === 'login' ? 'Welcome Back' : mode === 'signup' ? 'Join Pick Six' : 'Reset Password'}
           </h2>
