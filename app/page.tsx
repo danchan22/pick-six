@@ -8,6 +8,7 @@ import StatsTab from '@/components/Tabs/StatsTab';
 import RulesTab from '@/components/Tabs/RulesTab';
 import AdminTab from '@/components/Tabs/AdminTab';
 import PickAlertBanner from '@/components/Shared/PickAlertBanner';
+import SkeletonLoader from '@/components/Shared/SkeletonLoader';
 import AuthModal from '@/components/Modals/AuthModal';
 import ProfileModal from '@/components/Modals/ProfileModal';
 import PickHistoryModal from '@/components/Modals/PickHistoryModal';
@@ -73,8 +74,14 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
-        <span className="text-gray-400 text-sm">Loading Pick Six...</span>
+      <div className="min-h-screen bg-gray-950 text-white flex flex-col">
+        <header className="bg-gray-900 border-b border-gray-800 px-4 py-3">
+          <div className="max-w-3xl mx-auto flex items-center gap-2">
+            <span className="text-xl">🏈</span>
+            <h1 className="font-extrabold text-lg tracking-tight text-white">PICK SIX</h1>
+          </div>
+        </header>
+        <SkeletonLoader />
       </div>
     );
   }
@@ -223,7 +230,6 @@ export default function Home() {
       {session && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2">
           <div className="max-w-md mx-auto flex items-center justify-around">
-            {/* Picks Tab */}
             <button
               onClick={() => setActiveTab('picks')}
               className={`flex flex-col items-center gap-1 ${
@@ -238,7 +244,6 @@ export default function Home() {
               <span className="text-[11px]">Picks</span>
             </button>
 
-            {/* Standings Tab */}
             <button
               onClick={() => setActiveTab('leaderboard')}
               className={`flex flex-col items-center gap-1 ${
@@ -251,7 +256,6 @@ export default function Home() {
               <span className="text-[11px]">Standings</span>
             </button>
 
-            {/* Stats Tab */}
             <button
               onClick={() => setActiveTab('stats')}
               className={`flex flex-col items-center gap-1 ${
@@ -264,7 +268,6 @@ export default function Home() {
               <span className="text-[11px]">Stats</span>
             </button>
 
-            {/* Rules Tab */}
             <button
               onClick={() => setActiveTab('rules')}
               className={`flex flex-col items-center gap-1 ${
@@ -277,7 +280,6 @@ export default function Home() {
               <span className="text-[11px]">Rules</span>
             </button>
 
-            {/* Admin Tab */}
             {profile?.is_admin && (
               <button
                 onClick={() => setActiveTab('admin')}
