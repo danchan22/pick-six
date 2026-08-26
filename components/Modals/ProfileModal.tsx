@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -11,28 +10,12 @@ interface ProfileModalProps {
   onProfileUpdated: () => void;
 }
 
-const ALL_NFL_TEAMS = [
-  'Arizona Cardinals', 'Atlanta Falcons', 'Baltimore Ravens', 'Buffalo Bills',
-  'Carolina Panthers', 'Chicago Bears', 'Cincinnati Bengals', 'Cleveland Browns',
-  'Dallas Cowboys', 'Denver Broncos', 'Detroit Lions', 'Green Bay Packers',
-  'Houston Texans', 'Indianapolis Colts', 'Jacksonville Jaguars', 'Kansas City Chiefs',
-  'Las Vegas Raiders', 'Los Angeles Chargers', 'Los Angeles Rams', 'Miami Dolphins',
-  'Minnesota Vikings', 'New England Patriots', 'New Orleans Saints', 'New York Giants',
-  'New York Jets', 'Philadelphia Eagles', 'Pittsburgh Steelers', 'San Francisco 49ers',
-  'Seattle Seahawks', 'Tampa Bay Buccaneers', 'Tennessee Titans', 'Washington Commanders'
-];
-
-const SORTED_TEAMS = [...ALL_NFL_TEAMS].sort((a, b) =>
-  getTeamNickname(a).localeCompare(getTeamNickname(b))
-);
-
 export default function ProfileModal({
   isOpen,
   onClose,
   userId,
   onProfileUpdated,
 }: ProfileModalProps) {
-  const [activeTab, setActiveTab] = useState<'profile' | 'teams'>('profile');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [teamName, setTeamName] = useState('');
@@ -46,13 +29,11 @@ export default function ProfileModal({
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [allUserPicks, setAllUserPicks] = useState<any[]>([]);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (isOpen && userId) {
       loadUserProfile();
-      loadAllUserPicks();
     }
   }, [isOpen, userId]);
 
@@ -69,15 +50,6 @@ export default function ProfileModal({
       setTeamName(data.team_name || '');
       setAvatarUrl(data.avatar_url || null);
     }
-  };
-
-  const loadAllUserPicks = async () => {
-    const { data } = await supabase
-      .from('picks')
-      .select('*, games(*)')
-      .eq('user_id', userId);
-
-    setAllUserPicks(data || []);
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,33 +178,15 @@ export default function ProfileModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-5 shadow-2xl relative max-h-[90vh] flex flex-col">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white text-lg font-bold z-10"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white text-lg font-bold"
         >
           ✕
         </button>
 
-        {/* Tab Buttons */}
-        <div className="flex gap-2 mb-4 border-b border-gray-800 pb-2">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
-              activeTab === 'profile' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Profile Info
-          </button>
-          <button
-            onClick={() => setActiveTab('teams')}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
-              activeTab === 'teams' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            Teams Available
-          </button>
-        </div>
+        <h2 className="text-base font-bold text-white mb-4">Edit Profile</h2>
 
         {message && (
           <div
@@ -246,189 +200,110 @@ export default function ProfileModal({
           </div>
         )}
 
-        {activeTab === 'profile' ? (
-          <form onSubmit={handleSaveProfile} className="flex flex-col gap-4 overflow-y-auto pr-1">
-            <div className="flex flex-col items-center gap-3">
-              <div
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                className="w-48 h-48 rounded-full bg-gray-800 border-2 border-emerald-500 overflow-hidden relative cursor-grab active:cursor-grabbing shadow-xl select-none"
-              >
-                {rawImage ? (
-                  <img
-                    src={rawImage}
-                    alt="Crop Preview"
-                    style={{
-                      transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                      transformOrigin: 'center',
-                    }}
-                    className="w-full h-full object-cover pointer-events-none transition-transform duration-75"
-                  />
-                ) : avatarUrl ? (
-                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center font-bold text-2xl text-white">
-                    {initials}
-                  </div>
-                )}
-              </div>
-
-              {rawImage && (
-                <div className="flex flex-col items-center gap-1.5 w-full">
-                  <p className="text-[10px] text-emerald-400 font-semibold">
-                    👈 Drag image to position, use slider to zoom
-                  </p>
-                  <div className="flex items-center gap-2 w-full max-w-xs px-4">
-                    <span className="text-xs text-gray-400">Zoom</span>
-                    <input
-                      type="range"
-                      min="1"
-                      max="3"
-                      step="0.05"
-                      value={zoom}
-                      onChange={(e) => setZoom(parseFloat(e.target.value))}
-                      className="w-full accent-emerald-500"
-                    />
-                  </div>
+        <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+          <div className="flex flex-col items-center gap-3">
+            <div
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              className="w-48 h-48 rounded-full bg-gray-800 border-2 border-emerald-500 overflow-hidden relative cursor-grab active:cursor-grabbing shadow-xl select-none"
+            >
+              {rawImage ? (
+                <img
+                  src={rawImage}
+                  alt="Crop Preview"
+                  style={{
+                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: 'center',
+                  }}
+                  className="w-full h-full object-cover pointer-events-none transition-transform duration-75"
+                />
+              ) : avatarUrl ? (
+                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center font-bold text-2xl text-white">
+                  {initials}
                 </div>
               )}
-
-              <label className="cursor-pointer text-xs bg-gray-800 hover:bg-gray-700 text-emerald-400 px-3 py-1.5 rounded-lg border border-gray-700 font-semibold transition-colors">
-                {rawImage ? 'Choose Different Photo' : 'Upload New Photo'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-              </label>
             </div>
 
+            {rawImage && (
+              <div className="flex flex-col items-center gap-1.5 w-full">
+                <p className="text-[10px] text-emerald-400 font-semibold">
+                  👈 Drag image to position, use slider to zoom
+                </p>
+                <div className="flex items-center gap-2 w-full max-w-xs px-4">
+                  <span className="text-xs text-gray-400">Zoom</span>
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.05"
+                    value={zoom}
+                    onChange={(e) => setZoom(parseFloat(e.target.value))}
+                    className="w-full accent-emerald-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            <label className="cursor-pointer text-xs bg-gray-800 hover:bg-gray-700 text-emerald-400 px-3 py-1.5 rounded-lg border border-gray-700 font-semibold transition-colors">
+              {rawImage ? 'Choose Different Photo' : 'Upload New Photo'}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <div>
+            <label className="text-[11px] text-gray-400 block mb-1">Team Name</label>
+            <input
+              type="text"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              required
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[11px] text-gray-400 block mb-1">Team Name</label>
+              <label className="text-[11px] text-gray-400 block mb-1">First Name</label>
               <input
                 type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
                 required
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
               />
             </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[11px] text-gray-400 block mb-1">First Name</label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] text-gray-400 block mb-1">Last Name</label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-                />
-              </div>
+            <div>
+              <label className="text-[11px] text-gray-400 block mb-1">Last Name</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+              />
             </div>
-
-            <button
-              type="submit"
-              disabled={saving || uploading}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-sm mt-2 transition-colors"
-            >
-              {saving || uploading ? 'Saving & Uploading...' : 'Save Profile'}
-            </button>
-          </form>
-        ) : (
-          <div className="flex flex-col gap-2 overflow-y-auto pr-1 max-h-[65vh]">
-            <p className="text-[11px] text-gray-400 mb-1">
-              Seasonal pick counts across all 18 weeks (Max 6 per team).
-            </p>
-
-            {SORTED_TEAMS.map((teamFullName) => {
-              const teamNick = getTeamNickname(teamFullName);
-              const teamPicks = allUserPicks
-                .filter((p) => p.selected_team === teamFullName)
-                .sort((a, b) => (a.week || 0) - (b.week || 0));
-
-              const count = teamPicks.length;
-
-              return (
-                <div
-                  key={teamFullName}
-                  className="bg-gray-800/80 border border-gray-700/80 p-2 rounded-xl flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-2 min-w-0 pr-2">
-                    <img
-                      src={getTeamLogoUrl(teamFullName)}
-                      alt=""
-                      className="w-6 h-6 object-contain flex-shrink-0"
-                    />
-                    <span className="font-bold text-white truncate">{teamNick}</span>
-                    <span className="text-[10px] text-gray-400 font-mono font-medium flex-shrink-0">
-                      {count}/6
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    {Array.from({ length: 6 }).map((_, i) => {
-                      const pick = teamPicks[i];
-
-                      if (!pick) {
-                        return (
-                          <div
-                            key={i}
-                            className="w-6 h-6 rounded-md bg-gray-900/60 border border-gray-700/50 flex-shrink-0"
-                          />
-                        );
-                      }
-
-                      const game = pick.games;
-                      const isFinished = game?.status === 'post';
-
-                      let bgBorder = 'bg-blue-950/60 border-blue-500/60 text-blue-300';
-                      let label = '?';
-
-                      if (isFinished) {
-                        if (game?.winner_team === pick.selected_team) {
-                          bgBorder = 'bg-emerald-950/80 border-emerald-500 text-emerald-400';
-                          label = 'W';
-                        } else if (game?.winner_team === 'TIE') {
-                          bgBorder = 'bg-amber-950/80 border-amber-500 text-amber-400';
-                          label = 'T';
-                        } else {
-                          bgBorder = 'bg-red-950/80 border-red-500 text-red-400';
-                          label = 'L';
-                        }
-                      }
-
-                      return (
-                        <div
-                          key={i}
-                          className={`w-6 h-6 rounded-md border flex items-center justify-center font-mono font-extrabold text-[11px] flex-shrink-0 ${bgBorder}`}
-                        >
-                          {label}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
           </div>
-        )}
+
+          <button
+            type="submit"
+            disabled={saving || uploading}
+            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-lg text-sm mt-2 transition-colors"
+          >
+            {saving || uploading ? 'Saving & Uploading...' : 'Save Profile'}
+          </button>
+        </form>
       </div>
     </div>
   );
