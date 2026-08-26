@@ -85,7 +85,7 @@ export default function AdminTab() {
   };
 
   const handleCopyInviteLink = () => {
-    const inviteUrl = `${window.location.origin}`;
+    const inviteUrl = 'https://picksixleague.com';
     navigator.clipboard.writeText(inviteUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2500);
@@ -95,9 +95,9 @@ export default function AdminTab() {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
 
-    const subject = encodeURIComponent('Join our Pick Six NFL League!');
+    const subject = encodeURIComponent('Your invite to join Pick Six');
     const body = encodeURIComponent(
-      `Hey! You've been invited to join our Pick Six NFL league.\n\nClick here to register and set up your team:\n${window.location.origin}`
+      'Hey! This is your invite to join Pick Six, an NFL Pick Em league. Click here to register, set up your team, and start making picks! https://picksixleague.com.'
     );
     window.location.href = `mailto:${inviteEmail}?subject=${subject}&body=${body}`;
 
@@ -105,7 +105,6 @@ export default function AdminTab() {
     setInviteEmail('');
   };
 
-  // Admin Override Pick Selection
   const handleAdminSelectTeam = async (gameId: string, team: string) => {
     if (!selectedUserId) return;
     setAdminActionStatus(null);
@@ -113,12 +112,10 @@ export default function AdminTab() {
     const existingPick = userPicks.find((p) => p.game_id === gameId);
 
     if (existingPick?.selected_team === team) {
-      // Remove pick
       const { error } = await supabase.from('picks').delete().eq('id', existingPick.id);
       if (error) setAdminActionStatus(`Error: ${error.message}`);
       else setAdminActionStatus(`Removed pick for ${getTeamNickname(team)}`);
     } else if (existingPick) {
-      // Update team on existing pick
       const { error } = await supabase
         .from('picks')
         .update({ selected_team: team })
@@ -126,7 +123,6 @@ export default function AdminTab() {
       if (error) setAdminActionStatus(`Error: ${error.message}`);
       else setAdminActionStatus(`Updated pick to ${getTeamNickname(team)}`);
     } else {
-      // Insert new pick
       if (selectedWeek !== 18 && userPicks.length >= 6) {
         setAdminActionStatus('User already has 6 picks for this week.');
         return;
@@ -154,7 +150,6 @@ export default function AdminTab() {
     setAdminActionStatus(null);
 
     if (!currentLockState) {
-      // Unset any existing lock for this user and week first
       await supabase
         .from('picks')
         .update({ is_lock: false })
@@ -205,7 +200,7 @@ export default function AdminTab() {
         </button>
       </div>
 
-      {/* Subtab 1: Manage User Picks */}
+      {/* Manage User Picks */}
       {activeSubTab === 'picks' && (
         <div className="flex flex-col gap-4">
           <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-3">
@@ -253,7 +248,6 @@ export default function AdminTab() {
             )}
           </div>
 
-          {/* Current Picks Summary & Lock Manager */}
           <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-2">
             <div className="flex justify-between items-center border-b border-gray-800 pb-2">
               <span className="text-xs font-bold text-white">Current Submissions</span>
@@ -298,7 +292,6 @@ export default function AdminTab() {
             </div>
           </div>
 
-          {/* Matchups Board for Quick Toggling */}
           <div className="flex flex-col gap-2">
             <span className="text-xs font-bold text-gray-400 px-1">Week {selectedWeek} Matchup Board</span>
             {weekGames.map((game) => {
@@ -340,7 +333,7 @@ export default function AdminTab() {
         </div>
       )}
 
-      {/* Subtab 2: Invites & Roster */}
+      {/* Invites & Roster */}
       {activeSubTab === 'invites' && (
         <div className="flex flex-col gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
@@ -353,7 +346,7 @@ export default function AdminTab() {
               onClick={handleCopyInviteLink}
               className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-2.5 px-4 rounded-lg flex items-center justify-between transition-colors mt-1"
             >
-              <span className="truncate font-mono">{typeof window !== 'undefined' ? window.location.origin : ''}</span>
+              <span className="truncate font-mono">https://picksixleague.com</span>
               <span className="text-[11px] bg-emerald-500/20 px-2 py-1 rounded border border-emerald-500/40 text-emerald-300">
                 {copiedLink ? '✓ Copied!' : 'Copy Link'}
               </span>
@@ -425,7 +418,7 @@ export default function AdminTab() {
         </div>
       )}
 
-      {/* Subtab 3: Schedule Sync */}
+      {/* Schedule Sync */}
       {activeSubTab === 'schedule' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
           <div>
