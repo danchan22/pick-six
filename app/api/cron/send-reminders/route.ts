@@ -15,7 +15,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 1. Determine active week
     const now = new Date().toISOString();
     const { data: activeGames } = await supabaseAdmin
       .from('games')
@@ -27,7 +26,6 @@ export async function GET(req: NextRequest) {
     const currentWeek = activeGames?.[0]?.week || 1;
     const requiredPicks = currentWeek === 18 ? 16 : 6;
 
-    // 2. Fetch profiles, auth users (for emails), and picks
     const { data: profiles } = await supabaseAdmin.from('profiles').select('*');
     const { data: authData } = await supabaseAdmin.auth.admin.listUsers();
     const { data: weekPicks } = await supabaseAdmin
@@ -39,22 +37,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: 'No profiles or auth users found' });
     }
 
-    // Map user ID to email address
     const emailMap: Record<string, string> = {};
     authData.users.forEach((u) => {
       if (u.email) emailMap[u.id] = u.email;
     });
 
-    // Count picks per user
     const userPickCounts: Record<string, number> = {};
     (weekPicks || []).forEach((p) => {
       userPickCounts[p.user_id] = (userPickCounts[p.user_id] || 0) + 1;
     });
 
-    // 3. Filter members who still need to complete picks
+    // Filter members needing picks who haven't unsubscribed
     const incompleteUsers = profiles.filter((u) => {
       const count = userPickCounts[u.id] || 0;
-      return count < requiredPicks && !!emailMap[u.id];
+      const hasEmail = !!emailMap[u.id];
+      const isSubscribed = u.email_notifications !== false;
+      return count < requiredPicks && hasEmail && isSubscribed;
     });
 
     let sentCount = 0;
@@ -62,6 +60,7 @@ export async function GET(req: NextRequest) {
     for (const user of incompleteUsers) {
       const userEmail = emailMap[user.id];
       const userPicksDone = userPickCounts[user.id] || 0;
+      const unsubscribeUrl = `https://picksixleague.com/api/unsubscribe?userId=${user.id}`;
 
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -70,23 +69,30 @@ export async function GET(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: 'Pick Six League <onboarding@resend.dev>', // Change to reminders@picksixleague.com once domain DNS verifies
+          from: 'Pick Six League <reminders@picksixleague.com>',
           to: userEmail,
           subject: `🏈 Week ${currentWeek} Pick Reminder!`,
           html: `
-            <div style="font-family: sans-serif; background-color: #030712; color: #ffffff; padding: 24px; border-radius: 12px;">
+            <div style="font-family: sans-serif; background-color: #030712; color: #ffffff; padding: 24px; border-radius: 12px; max-width: 500px; margin: 0 auto;">
               <h2 style="color: #10b981; margin-bottom: 8px;">Hey ${user.first_name || 'Player'}!</h2>
-              <p style="color: #d1d5db; font-size: 14px;">
+              <p style="color: #d1d5db; font-size: 14px; line-height: 1.5;">
                 You currently have <strong>${userPicksDone} of ${requiredPicks}</strong> picks submitted for <strong>Week ${currentWeek}</strong>.
               </p>
               <p style="color: #9ca3af; font-size: 13px;">
-                Don't leave points on the table—games lock at kickoff!
+                Don't leave points on the table—games lock individually at kickoff!
               </p>
-              <div style="margin-top: 20px;">
+              <div style="margin-top: 20px; margin-bottom: 24px;">
                 <a href="https://picksixleague.com" style="background-color: #059669; color: #ffffff; text-decoration: none; font-weight: bold; padding: 10px 20px; border-radius: 8px; display: inline-block;">
                   Make Your Picks Now
                 </a>
               </div>
+              <hr style="border: 0; border-top: 1px solid #1f2937; margin-bottom: 16px;" />
+              <p style="font-size: 11px; color: #6b7280; text-align: center; margin: 0;">
+                Pick Six NFL League &bull; 
+                <a href="${unsubscribeUrl}" style="color: #9ca3af; text-decoration: underline;">
+                  Unsubscribe from reminders
+                </a>
+              </p>
             </div>
           `,
         }),
