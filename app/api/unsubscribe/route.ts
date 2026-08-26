@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
     return new NextResponse('Failed to update email preferences', { status: 500 });
   }
 
+  const resubscribeUrl = `https://picksixleague.com/api/resubscribe?userId=${userId}`;
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -32,9 +34,14 @@ export async function GET(req: NextRequest) {
           <p style="color: #9ca3af; font-size: 14px; line-height: 1.5; margin-bottom: 24px;">
             You will no longer receive weekly pick reminder emails for Pick Six.
           </p>
-          <a href="https://picksixleague.com" style="background-color: #059669; color: #ffffff; text-decoration: none; font-weight: bold; padding: 10px 20px; border-radius: 8px; display: inline-block; font-size: 14px;">
-            Return to App
-          </a>
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <a href="https://picksixleague.com" style="background-color: #059669; color: #ffffff; text-decoration: none; font-weight: bold; padding: 10px 20px; border-radius: 8px; display: inline-block; font-size: 14px;">
+              Return to App
+            </a>
+            <a href="${resubscribeUrl}" style="color: #9ca3af; text-decoration: underline; font-size: 12px; margin-top: 8px;">
+              Unsubscribed by mistake? Re-subscribe here
+            </a>
+          </div>
         </div>
       </body>
     </html>
