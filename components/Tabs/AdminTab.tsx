@@ -214,7 +214,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
 
   const requiredPicksCount = selectedWeek === 18 ? 16 : 6;
 
-  // Calculate stats for Weekly Status tab
   const memberStatusList = profiles.map((p) => {
     const picksForUser = allWeekPicks.filter((pick) => pick.user_id === p.id);
     const hasLock = picksForUser.some((pick) => pick.is_lock);
@@ -223,9 +222,7 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
 
     return {
       profile: p,
-      picks: picksForUser,
       count,
-      hasLock,
       isComplete,
     };
   });
@@ -315,80 +312,49 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
               </button>
             </div>
 
-            <div className="text-right font-mono">
-              <span className="text-xs font-bold text-emerald-400 block">
-                {completedCount}/{profiles.length} Ready
-              </span>
-              <span className="text-[10px] text-gray-400">Week {selectedWeek} Submissions</span>
-            </div>
+            <span className="text-xs font-mono font-bold text-emerald-400">
+              {completedCount}/{profiles.length} Ready
+            </span>
           </div>
 
           {/* League Roster Submission Status Cards */}
           <div className="flex flex-col gap-2">
-            {memberStatusList.map(({ profile: p, picks, count, hasLock, isComplete }) => (
+            {memberStatusList.map(({ profile: p, count, isComplete }) => (
               <div
                 key={p.id}
-                className={`p-3 rounded-xl border flex flex-col gap-2.5 transition-all ${
+                className={`p-3 rounded-xl border flex justify-between items-center transition-all ${
                   isComplete
                     ? 'bg-emerald-950/20 border-emerald-500/50'
                     : 'bg-red-950/20 border-red-500/50'
                 }`}
               >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center font-bold text-xs overflow-hidden">
-                      {p.avatar_url ? (
-                        <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        `${p.first_name?.slice(0, 1) || ''}${p.last_name?.slice(0, 1) || ''}`
-                      )}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-bold text-xs text-white flex items-center gap-1">
-                        {p.team_name} {p.championships && '🏆'}
-                      </span>
-                      <span className="text-[10px] text-gray-400">
-                        {p.first_name} {p.last_name}
-                      </span>
-                    </div>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-gray-800 border border-gray-700 flex items-center justify-center font-bold text-xs overflow-hidden">
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      `${p.first_name?.slice(0, 1) || ''}${p.last_name?.slice(0, 1) || ''}`
+                    )}
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
-                        isComplete
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-red-500/20 text-red-300 border-red-500/40'
-                      }`}
-                    >
-                      {count}/{requiredPicksCount} Picks {isComplete ? '✓' : '⚠️'}
+                  <div className="flex flex-col">
+                    <span className="font-bold text-xs text-white flex items-center gap-1">
+                      {p.team_name} {p.championships && '🏆'}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {p.first_name} {p.last_name}
                     </span>
                   </div>
                 </div>
 
-                {/* Pick Preview Row */}
-                {picks.length > 0 && (
-                  <div className="flex items-center gap-1.5 border-t border-gray-800/80 pt-2 overflow-x-auto">
-                    {picks.map((pick) => (
-                      <div
-                        key={pick.id}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] whitespace-nowrap ${
-                          pick.is_lock
-                            ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold'
-                            : 'bg-gray-800/80 border-gray-700 text-gray-300'
-                        }`}
-                      >
-                        <img
-                          src={getTeamLogoUrl(pick.selected_team)}
-                          alt=""
-                          className="w-3.5 h-3.5 object-contain"
-                        />
-                        <span>{getTeamNickname(pick.selected_team)}</span>
-                        {pick.is_lock && <span className="text-[8px]">🔒</span>}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <span
+                  className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
+                    isComplete
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-red-500/20 text-red-300 border-red-500/40'
+                  }`}
+                >
+                  {count}/{requiredPicksCount} Picks {isComplete ? '✓' : '⚠️'}
+                </span>
               </div>
             ))}
           </div>
