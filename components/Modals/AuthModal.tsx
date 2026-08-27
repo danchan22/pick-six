@@ -5,8 +5,23 @@ import { supabase } from '@/lib/supabaseClient';
 
 interface AuthModalProps {
   isOpen: boolean;
-  onSuccess: () => void;
+  onSuccess: (isNewSignUp?: boolean) => void;
 }
+
+const DAN_TEAM_NAMES = [
+  'Dan is the Best',
+  'The Danimals',
+  'Dan is the Man',
+  'Wow, Dan is So Cool',
+  "Dan, Dan, He's Our Man",
+  'The Philadelphi-Dans',
+  'Dan Dan Dan Dan Dan',
+  'I Love Dan',
+  '<3 Dan <3',
+  'Dan is Cooler Than Me',
+  'Dan is My Hero',
+  'Dan is Better Than Me at Pick Em',
+];
 
 export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
@@ -20,6 +35,11 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const handleGenerateRandomTeamName = () => {
+    const randomName = DAN_TEAM_NAMES[Math.floor(Math.random() * DAN_TEAM_NAMES.length)];
+    setTeamName(randomName);
+  };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,24 +69,48 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
         email: email.trim(),
         password,
       });
-      if (error) setErrorMsg(error.message);
-      else onSuccess();
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        onSuccess(false);
+      }
     } else {
+      const trimmedFirst = firstName.trim();
+      const trimmedLast = lastName.trim();
+      const trimmedTeam = teamName.trim() || 'Pick Six Competitor';
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: {
+          data: {
+            first_name: trimmedFirst,
+            last_name: trimmedLast,
+            team_name: trimmedTeam,
+          },
+        },
       });
 
       if (error) {
         setErrorMsg(error.message);
       } else if (data.user) {
-        await supabase.from('profiles').insert({
-          id: data.user.id,
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          team_name: teamName.trim(),
-        });
-        onSuccess();
+        // Guarantee profile row is saved into public.profiles
+        const { error: profileError } = await supabase.from('profiles').upsert(
+          {
+            id: data.user.id,
+            first_name: trimmedFirst,
+            last_name: trimmedLast,
+            team_name: trimmedTeam,
+            email_notifications: true,
+          },
+          { onConflict: 'id' }
+        );
+
+        if (profileError) {
+          console.error('Profile insertion error:', profileError);
+        }
+
+        onSuccess(true);
       }
     }
     setLoading(false);
@@ -134,16 +178,31 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
           <form onSubmit={handleAuth} className="flex flex-col gap-3">
             {mode === 'signup' && (
               <>
-                <div>
-                  <label className="text-[11px] text-gray-400 block mb-1">Team Name</label>
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[11px] text-gray-400">Team Name</label>
+                    <span className="text-[10px] text-emerald-400">You can change this anytime</span>
+                  </div>
                   <input
                     type="text"
                     required
                     value={teamName}
                     onChange={(e) => setTeamName(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white"
+                    placeholder="e.g. Gridiron Gurus"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-[10px] text-gray-500">Need a suggestion?</span>
+                    <button
+                      type="button"
+                      onClick={handleGenerateRandomTeamName}
+                      className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline"
+                    >
+                      Generate a Random Team Name
+                    </button>
+                  </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[11px] text-gray-400 block mb-1">First Name</label>
