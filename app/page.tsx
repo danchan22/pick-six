@@ -33,6 +33,9 @@ export default function Home() {
   const [hasLock, setHasLock] = useState(false);
 
   useEffect(() => {
+    // Explicitly guarantee user menu starts closed
+    setUserMenuOpen(false);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) loadProfile(session.user.id);
@@ -42,6 +45,7 @@ export default function Home() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserMenuOpen(false);
       setSession(session);
       if (session?.user) loadProfile(session.user.id);
       else setProfile(null);
@@ -58,9 +62,12 @@ export default function Home() {
 
   const fetchCurrentWeek = async () => {
     const now = new Date().toISOString();
+
+    // Query specifically for regular season games
     const { data } = await supabase
       .from('games')
       .select('week')
+      .eq('season_year', 2026)
       .gte('kickoff_time', now)
       .order('kickoff_time', { ascending: true })
       .limit(1);
@@ -68,7 +75,7 @@ export default function Home() {
     const activeW = data && data.length > 0 ? data[0].week : 1;
     setCurrentWeek(activeW);
 
-    // Auto-trigger weekly recap if previous week finished and user hasn't dismissed it yet
+    // Only trigger auto-recap if regular season is underway (e.g. activeW > 1)
     if (activeW > 1) {
       const prevW = activeW - 1;
       const seenKey = `picksix_recap_seen_week_${prevW}`;
