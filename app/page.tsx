@@ -13,6 +13,7 @@ import AuthModal from '@/components/Modals/AuthModal';
 import ProfileModal from '@/components/Modals/ProfileModal';
 import PickHistoryModal from '@/components/Modals/PickHistoryModal';
 import TeamsAvailableModal from '@/components/Modals/TeamsAvailableModal';
+import HelpModal from '@/components/Modals/HelpModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'stats' | 'rules' | 'admin'>('picks');
@@ -22,6 +23,7 @@ export default function Home() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isTeamsAvailableOpen, setIsTeamsAvailableOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [userPicksCount, setUserPicksCount] = useState(0);
@@ -72,6 +74,12 @@ export default function Home() {
     setHasLock(lockStatus);
   };
 
+  const handleAuthSuccess = (isNewSignUp?: boolean) => {
+    if (isNewSignUp) {
+      setIsHelpOpen(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-950 text-white flex flex-col">
@@ -120,7 +128,7 @@ export default function Home() {
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
+                <div className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl py-1 z-50">
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
@@ -137,7 +145,16 @@ export default function Home() {
                     }}
                     className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
                   >
-                    <span>📊</span> Teams Available
+                    <span>📊</span> Team Pick Frequency
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setIsHelpOpen(true);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-gray-300 hover:bg-gray-800 hover:text-white flex items-center gap-2"
+                  >
+                    <span>❓</span> Help & How to Play
                   </button>
                   <button
                     onClick={() => {
@@ -199,7 +216,7 @@ export default function Home() {
         )}
       </div>
 
-      <AuthModal isOpen={!session} onSuccess={() => {}} />
+      <AuthModal isOpen={!session} onSuccess={handleAuthSuccess} />
 
       {session && (
         <>
@@ -223,6 +240,11 @@ export default function Home() {
             onClose={() => setIsTeamsAvailableOpen(false)}
             userId={session.user.id}
             profile={profile}
+          />
+
+          <HelpModal
+            isOpen={isHelpOpen}
+            onClose={() => setIsHelpOpen(false)}
           />
         </>
       )}
