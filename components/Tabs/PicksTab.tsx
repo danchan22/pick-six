@@ -256,19 +256,20 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           const homeNickname = getTeamNickname(game.home_team);
           const awayNickname = getTeamNickname(game.away_team);
 
+          const kickoffDate = new Date(game.kickoff_time);
+          const dayName = kickoffDate.toLocaleDateString('en-US', { weekday: 'short' });
+          const month = kickoffDate.getMonth() + 1;
+          const day = kickoffDate.getDate();
+          const timeStr = kickoffDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          const formattedKickoff = `${dayName} ${month}/${day} • ${timeStr}`;
+
           return (
             <div
               key={game.id}
               className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2.5"
             >
               <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
-                <span>
-                  {new Date(game.kickoff_time).toLocaleDateString([], {
-                    weekday: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </span>
+                <span>{formattedKickoff}</span>
                 {locked && <span className="text-red-400 font-bold">🔒</span>}
               </div>
 
@@ -337,8 +338,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           <div className="max-w-md mx-auto flex flex-col gap-1.5">
             {/* Week 1 Lock Helper Banner */}
             {selectedWeek === 1 && (
-              <div className="bg-gray-900/90 border border-amber-500/50 text-amber-300 text-[11px] font-medium px-3 py-1.5 rounded-xl flex items-center justify-center gap-1.5 text-center shadow-lg">
-                <span>💡</span>
+              <div className="bg-gray-900/90 border border-amber-500/50 text-amber-300 text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-xl flex items-center justify-center text-center shadow-lg">
                 <span>Tap a team below to move it into your Lock of the Week slot</span>
               </div>
             )}
