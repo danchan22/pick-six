@@ -94,8 +94,7 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
       if (error) {
         setErrorMsg(error.message);
       } else if (data.user) {
-        // Guarantee profile row is saved into public.profiles
-        const { error: profileError } = await supabase.from('profiles').upsert(
+        await supabase.from('profiles').upsert(
           {
             id: data.user.id,
             first_name: trimmedFirst,
@@ -105,10 +104,6 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
           },
           { onConflict: 'id' }
         );
-
-        if (profileError) {
-          console.error('Profile insertion error:', profileError);
-        }
 
         onSuccess(true);
       }
@@ -131,7 +126,9 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
           <p className="text-xs text-gray-400 mt-1">
             {mode === 'forgot'
               ? 'Enter your email to receive a password reset link.'
-              : 'Enter your credentials to continue.'}
+              : mode === 'signup'
+              ? 'Enter your information to sign up'
+              : 'Enter your credentials to continue'}
           </p>
         </div>
 
