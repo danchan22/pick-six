@@ -338,8 +338,9 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           <div className="max-w-md mx-auto flex flex-col gap-1.5">
             {/* Week 1 Lock Helper Banner */}
             {selectedWeek === 1 && (
-              <div className="bg-gray-900/90 border border-amber-500/50 text-amber-300 text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-xl flex items-center justify-center text-center shadow-lg">
-                <span>Tap a team below to move it into your Lock of the Week slot</span>
+              <div className="bg-gray-900/90 border border-amber-500/50 text-amber-300 text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-xl flex items-center justify-center gap-1.5 text-center shadow-lg">
+                <span>💡</span>
+                <span>Tap a team below, then tap on the far right lock slot to make that team your Lock of the Week.</span>
               </div>
             )}
 
