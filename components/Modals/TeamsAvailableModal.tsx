@@ -52,8 +52,8 @@ export default function TeamsAvailableModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative max-h-[85vh] overflow-y-auto text-white">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-4 sm:p-6 shadow-2xl relative max-h-[85vh] overflow-y-auto text-white">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-white text-lg font-bold"
@@ -70,31 +70,35 @@ export default function TeamsAvailableModal({
           {ALL_NFL_TEAMS.map((teamFullName) => {
             const picks = teamPicksMap[teamFullName] || [];
             const nick = getTeamNickname(teamFullName);
+            const isMaxedOut = picks.length >= 6;
 
             return (
               <div
                 key={teamFullName}
-                className="bg-gray-800/80 border border-gray-700/80 p-2.5 rounded-xl flex items-center justify-between"
+                className={`p-2 sm:p-2.5 rounded-xl border flex items-center justify-between transition-colors ${
+                  isMaxedOut
+                    ? 'bg-red-950/30 border-red-500 text-red-100'
+                    : 'bg-gray-800/80 border-gray-700/80 text-gray-200'
+                }`}
               >
-                <div className="flex items-center gap-2 min-w-[130px]">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 pr-2 flex-1">
                   <img
                     src={getTeamLogoUrl(teamFullName)}
                     alt=""
-                    className="w-5 h-5 object-contain flex-shrink-0"
+                    className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
                   />
                   <span className="font-bold text-xs truncate">{nick}</span>
                 </div>
 
-                {/* 6 Pick Tracking Boxes */}
-                <div className="flex items-center gap-1.5">
+                {/* 6 Fixed Compact Boxes */}
+                <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
                   {Array.from({ length: 6 }).map((_, i) => {
                     const pick = picks[i];
                     if (!pick) {
-                      // Unused slot
                       return (
                         <div
                           key={i}
-                          className="w-6 h-6 rounded-md border border-dashed border-gray-700 bg-gray-900/40 flex items-center justify-center text-[10px] text-gray-600 font-mono"
+                          className="w-5 h-5 sm:w-6 sm:h-6 rounded border border-dashed border-gray-700 bg-gray-900/40 flex items-center justify-center text-[9px] sm:text-[10px] text-gray-600 font-mono"
                         >
                           {i + 1}
                         </div>
@@ -111,7 +115,7 @@ export default function TeamsAvailableModal({
                       return (
                         <div
                           key={i}
-                          className="w-6 h-6 rounded-md bg-emerald-600 border border-emerald-500 text-white font-extrabold text-[11px] flex items-center justify-center shadow"
+                          className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-emerald-600 border border-emerald-500 text-white font-extrabold text-[10px] sm:text-[11px] flex items-center justify-center shadow"
                           title={`Week ${pick.week}: Win`}
                         >
                           W
@@ -121,7 +125,7 @@ export default function TeamsAvailableModal({
                       return (
                         <div
                           key={i}
-                          className="w-6 h-6 rounded-md bg-red-600 border border-red-500 text-white font-extrabold text-[11px] flex items-center justify-center shadow"
+                          className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-red-600 border border-red-500 text-white font-extrabold text-[10px] sm:text-[11px] flex items-center justify-center shadow"
                           title={`Week ${pick.week}: Loss`}
                         >
                           L
@@ -131,7 +135,7 @@ export default function TeamsAvailableModal({
                       return (
                         <div
                           key={i}
-                          className="w-6 h-6 rounded-md bg-gray-800 border border-gray-600 text-amber-400 font-extrabold text-[11px] flex items-center justify-center shadow"
+                          className="w-5 h-5 sm:w-6 sm:h-6 rounded bg-gray-800 border border-gray-600 text-amber-400 font-extrabold text-[10px] sm:text-[11px] flex items-center justify-center shadow"
                           title={`Week ${pick.week}: Pending`}
                         >
                           ?
