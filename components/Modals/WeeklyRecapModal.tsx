@@ -34,16 +34,21 @@ export default function WeeklyRecapModal({
   const loadRecapData = async () => {
     setLoading(true);
 
-    // 1. Fetch user picks for selected week
     const { data: userPickData } = await supabase
       .from('picks')
       .select('*, games(*)')
       .eq('user_id', userId)
       .eq('week', week);
 
-    setPicks(userPickData || []);
+    // Sort so Lock of the Week is ALWAYS at the very bottom
+    const sortedPicks = [...(userPickData || [])].sort((a, b) => {
+      if (a.is_lock) return 1;
+      if (b.is_lock) return -1;
+      return 0;
+    });
 
-    // 2. Fetch all season picks to compute season stats & standings
+    setPicks(sortedPicks);
+
     const { data: allPicks } = await supabase.from('picks').select('*, games(*)');
     const { data: profiles } = await supabase.from('profiles').select('*');
 
@@ -103,7 +108,6 @@ export default function WeeklyRecapModal({
 
   if (!isOpen) return null;
 
-  // Calculate target week stats
   let wins = 0;
   let losses = 0;
   let weekPoints = 0;
@@ -123,7 +127,6 @@ export default function WeeklyRecapModal({
     }
   });
 
-  // Dynamic Headline Matrix
   const getHeadline = (w: number, l: number) => {
     const key = `${w}-${l}`;
     switch (key) {
@@ -189,43 +192,42 @@ export default function WeeklyRecapModal({
           </div>
         ) : (
           <>
-            {/* Multi-line Stats Summary Box */}
+            {/* Multi-line Stats Grid */}
             <div className="grid grid-cols-3 gap-2 bg-gray-800/60 p-3 rounded-xl border border-gray-700/60 font-mono">
               <div className="flex flex-col">
                 <span className="text-[10px] text-gray-400 uppercase">Record</span>
-                <span className="text-xs font-bold text-white mt-0.5">
-                  This Week: <span className="text-emerald-400">{wins}-{losses}</span>
+                <span className="text-sm font-extrabold text-emerald-400 mt-0.5">
+                  {wins}-{losses}
                 </span>
-                <span className="text-[11px] text-gray-400 mt-0.5">
+                <span className="text-[10px] text-gray-400 mt-0.5">
                   Season: {seasonWins}-{seasonLosses}
                 </span>
               </div>
 
               <div className="flex flex-col">
                 <span className="text-[10px] text-gray-400 uppercase">Points</span>
-                <span className="text-xs font-bold text-white mt-0.5">
-                  This Week:{' '}
-                  <span className={weekPoints > 0 ? 'text-emerald-400' : weekPoints < 0 ? 'text-red-400' : 'text-gray-300'}>
-                    {weekPoints > 0 ? `+${weekPoints}` : weekPoints}
-                  </span>
+                <span
+                  className={`text-sm font-extrabold mt-0.5 ${
+                    weekPoints > 0 ? 'text-emerald-400' : weekPoints < 0 ? 'text-red-400' : 'text-gray-300'
+                  }`}
+                >
+                  {weekPoints > 0 ? `+${weekPoints}` : weekPoints}
                 </span>
-                <span className="text-[11px] text-gray-400 mt-0.5">
+                <span className="text-[10px] text-gray-400 mt-0.5">
                   Season: {seasonPoints} pts
                 </span>
               </div>
 
               <div className="flex flex-col">
                 <span className="text-[10px] text-gray-400 uppercase">Standings</span>
-                <span className="text-xs font-bold text-amber-400 mt-0.5">
-                  {userRank ? `#${userRank}` : '-'}
-                </span>
-                <span className="text-[11px] text-gray-400 mt-0.5">
-                  of {totalMembers} teams
+                <span className="text-sm font-extrabold text-amber-400 mt-0.5">
+                  {userRank ? `#${userRank}` : '-'}{' '}
+                  <span className="text-[10px] text-gray-400 font-normal">of {totalMembers}</span>
                 </span>
               </div>
             </div>
 
-            {/* Pick Results List */}
+            {/* Pick Results */}
             <div className="flex flex-col gap-2">
               {picks.length === 0 ? (
                 <p className="text-xs text-gray-500 py-4 text-center">No picks were submitted for Week {week}.</p>
@@ -236,7 +238,6 @@ export default function WeeklyRecapModal({
                   const winner = game?.winner_team;
                   const isWin = isFinished && winner === pick.selected_team;
 
-                  // Determine Home vs Away Opponent string
                   let opponentText = '';
                   let selectedScore = 0;
                   let opponentScore = 0;
@@ -275,7 +276,6 @@ export default function WeeklyRecapModal({
                         </div>
                       </div>
 
-                      {/* Score Outcome Box */}
                       <div className="flex items-center flex-shrink-0">
                         {isFinished ? (
                           <div
