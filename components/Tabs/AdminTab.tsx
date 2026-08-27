@@ -27,7 +27,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
   const [allWeekPicks, setAllWeekPicks] = useState<any[]>([]);
   const [adminActionStatus, setAdminActionStatus] = useState<string | null>(null);
 
-  // Recap Preview Modal State
   const [isPreviewRecapOpen, setIsPreviewRecapOpen] = useState(false);
 
   useEffect(() => {
@@ -125,14 +124,21 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
   const handleDeleteProfile = async (userId: string, teamName: string) => {
     if (!confirm(`Are you sure you want to remove "${teamName}"? This will permanently delete their profile and picks.`)) return;
 
-    await supabase.from('picks').delete().eq('user_id', userId);
-    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    try {
+      const res = await fetch('/api/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
 
-    if (error) {
-      alert(`Error removing profile: ${error.message}`);
-    } else {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete');
+
       alert(`Successfully removed ${teamName}`);
       fetchProfiles();
+      fetchAllWeekPicks();
+    } catch (err: any) {
+      alert(`Error removing profile: ${err.message}`);
     }
   };
 
@@ -166,65 +172,55 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
     if (!selectedUserId) return;
     setAdminActionStatus(null);
 
-    const existingPick = userPicks.find((p) => p.game_id === gameId);
-
-    if (existingPick?.selected_team === team) {
-      const { error } = await supabase.from('picks').delete().eq('id', existingPick.id);
-      if (error) setAdminActionStatus(`Error: ${error.message}`);
-      else setAdminActionStatus(`Removed pick for ${getTeamNickname(team)}`);
-    } else if (existingPick) {
-      const { error } = await supabase
-        .from('picks')
-        .update({ selected_team: team })
-        .eq('id', existingPick.id);
-      if (error) setAdminActionStatus(`Error: ${error.message}`);
-      else setAdminActionStatus(`Updated pick to ${getTeamNickname(team)}`);
-    } else {
-      if (selectedWeek !== 18 && userPicks.length >= 6) {
-        setAdminActionStatus('User already has 6 picks for this week.');
-        return;
-      }
-
-      const hasLock = userPicks.some((p) => p.is_lock);
-      const isLock = selectedWeek !== 18 && !hasLock && userPicks.length === 5;
-
-      const { error } = await supabase.from('picks').insert({
-        user_id: selectedUserId,
-        game_id: gameId,
-        week: selectedWeek,
-        selected_team: team,
-        is_lock: isLock,
+    try {
+      const res = await fetch('/api/admin/manage-picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'select_team',
+          userId: selectedUserId,
+          gameId,
+          week: selectedWeek,
+          team,
+        }),
       });
 
-      if (error) setAdminActionStatus(`Error: ${error.message}`);
-      else setAdminActionStatus(`Added pick for ${getTeamNickname(team)}`);
-    }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update pick');
 
-    fetchUserPicks();
-    fetchAllWeekPicks();
+      setAdminActionStatus(data.message);
+      fetchUserPicks();
+      fetchAllWeekPicks();
+    } catch (err: any) {
+      setAdminActionStatus(`Error: ${err.message}`);
+    }
   };
 
   const handleAdminToggleLock = async (pickId: string, currentLockState: boolean) => {
     setAdminActionStatus(null);
 
-    if (!currentLockState) {
-      await supabase
-        .from('picks')
-        .update({ is_lock: false })
-        .eq('user_id', selectedUserId)
-        .eq('week', selectedWeek);
+    try {
+      const res = await fetch('/api/admin/manage-picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'toggle_lock',
+          userId: selectedUserId,
+          week: selectedWeek,
+          pickId,
+          isLock: currentLockState,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to toggle lock');
+
+      setAdminActionStatus(currentLockState ? 'Lock removed' : 'Lock designated!');
+      fetchUserPicks();
+      fetchAllWeekPicks();
+    } catch (err: any) {
+      setAdminActionStatus(`Error: ${err.message}`);
     }
-
-    const { error } = await supabase
-      .from('picks')
-      .update({ is_lock: !currentLockState })
-      .eq('id', pickId);
-
-    if (error) setAdminActionStatus(`Error: ${error.message}`);
-    else setAdminActionStatus(currentLockState ? 'Lock removed' : 'Lock designated!');
-
-    fetchUserPicks();
-    fetchAllWeekPicks();
   };
 
   const requiredPicksCount = selectedWeek === 18 ? 16 : 6;
@@ -635,7 +631,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </div>
       )}
 
-      {/* Recap Preview Modal */}
       {selectedUserId && (
         <WeeklyRecapModal
           isOpen={isPreviewRecapOpen}
