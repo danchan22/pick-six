@@ -2,28 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { getTeamNickname, getTeamLogoUrl, getTeamAbbr } from '@/lib/nflTeams';
-
-interface Game {
-  id: string;
-  week: number;
-  home_team: string;
-  away_team: string;
-  home_record?: string;
-  away_record?: string;
-  kickoff_time: string;
-  status: string;
-  winner_team: string | null;
-}
-
-interface Pick {
-  id: string;
-  game_id: string;
-  selected_team: string;
-  is_lock: boolean;
-  points_awarded?: number;
-  games?: Game;
-}
+import { getTeamLogoUrl, getTeamNickname } from '@/lib/nflTeams';
 
 interface PicksTabProps {
   userId: string;
@@ -32,49 +11,53 @@ interface PicksTabProps {
 }
 
 export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksTabProps) {
-  const [selectedWeek, setSelectedWeek] = useState(currentWeek || 1);
-  const [games, setGames] = useState<Game[]>([]);
-  const [picks, setPicks] = useState<Pick[]>([]);
-  const [teamPickCounts, setTeamPickCounts] = useState<Record<string, number>>({});
-  const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<number | null>(null);
+  const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
+  const [games, setGames] = useState<any[]>([]);
+  const [picks, setPicks] = useState<any[]>([]);
+  const [userPickCounts, setUserPickCounts] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentWeek) setSelectedWeek(currentWeek);
   }, [currentWeek]);
 
   useEffect(() => {
-    fetchWeekGames();
-    fetchUserPicks();
-    fetchSeasonTeamCounts();
-  }, [selectedWeek, userId]);
+    if (userId) {
+      fetchWeekData();
+      fetchSeasonPickCounts();
+    }
+  }, [userId, selectedWeek]);
 
-  const fetchWeekGames = async () => {
-    const { data } = await supabase
+  useEffect(() => {
+    if (onPicksChanged) {
+      const lockExists = picks.some((p) => p.is_lock);
+      onPicksChanged(picks.length, lockExists);
+    }
+  }, [picks]);
+
+  const fetchWeekData = async () => {
+    setLoading(true);
+    // 1. Fetch matchups
+    const { data: gameData } = await supabase
       .from('games')
       .select('*')
       .eq('week', selectedWeek)
       .order('kickoff_time', { ascending: true });
-    setGames(data || []);
-  };
 
-  const fetchUserPicks = async () => {
-    const { data, error } = await supabase
+    // 2. Fetch user picks for this week
+    const { data: pickData } = await supabase
       .from('picks')
-      .select('*, games(*)')
+      .select('*')
       .eq('user_id', userId)
       .eq('week', selectedWeek);
 
-    if (error) return;
-
-    const currentPicks = data || [];
-    setPicks(currentPicks);
-
-    if (selectedWeek === currentWeek && onPicksChanged) {
-      onPicksChanged(currentPicks.length, currentPicks.some((p) => p.is_lock));
-    }
+    setGames(gameData || []);
+    setPicks(pickData || []);
+    setLoading(false);
   };
 
-  const fetchSeasonTeamCounts = async () => {
+  const fetchSeasonPickCounts = async () => {
     const { data } = await supabase
       .from('picks')
       .select('selected_team')
@@ -84,340 +67,318 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     (data || []).forEach((p) => {
       counts[p.selected_team] = (counts[p.selected_team] || 0) + 1;
     });
-    setTeamPickCounts(counts);
+    setUserPickCounts(counts);
   };
 
-  const deletePick = async (pickId: string) => {
-    const { error } = await supabase.from('picks').delete().eq('id', pickId);
-    if (error) return;
-    await fetchUserPicks();
-    await fetchSeasonTeamCounts();
-  };
+  const handleSelectTeam = async (game: any, team: string) => {
+    setStatusMsg(null);
+    const now = new Date();
+    const kickoff = new Date(game.kickoff_time);
 
-  const handleSelectTeam = async (gameId: string, team: string) => {
-    const isChaosWeek = selectedWeek === 18;
-    const existingPick = picks.find((p) => p.game_id === gameId);
+    if (now >= kickoff) {
+      setStatusMsg('This game has already started and is locked.');
+      return;
+    }
 
+    const existingPick = picks.find((p) => p.game_id === game.id);
+
+    // If tapping team already selected -> deselect
     if (existingPick?.selected_team === team) {
-      await deletePick(existingPick.id);
-    } else if (existingPick) {
-      await supabase
+      const { error } = await supabase.from('picks').delete().eq('id', existingPick.id);
+      if (!error) {
+        setPicks((prev) => prev.filter((p) => p.id !== existingPick.id));
+        fetchSeasonPickCounts();
+      }
+      return;
+    }
+
+    // Check season 6-use limit
+    const currentTeamUses = userPickCounts[team] || 0;
+    if (currentTeamUses >= 6 && (!existingPick || existingPick.selected_team !== team)) {
+      setStatusMsg(`You have already picked the ${getTeamNickname(team)} 6 times this season.`);
+      return;
+    }
+
+    // Week 1-17 logic (6 picks max)
+    if (selectedWeek !== 18 && !existingPick && picks.length >= 6) {
+      setStatusMsg('You can only select 6 teams per week. Deselect a team first.');
+      return;
+    }
+
+    const hasLock = picks.some((p) => p.is_lock);
+    const shouldBeLock = selectedWeek !== 18 && !hasLock && picks.length === 5;
+
+    if (existingPick) {
+      // Update existing pick
+      const { data, error } = await supabase
         .from('picks')
         .update({ selected_team: team })
-        .eq('id', existingPick.id);
-      fetchUserPicks();
+        .eq('id', existingPick.id)
+        .select()
+        .single();
+
+      if (!error && data) {
+        setPicks((prev) => prev.map((p) => (p.id === existingPick.id ? data : p)));
+        fetchSeasonPickCounts();
+      }
     } else {
-      if (!isChaosWeek && picks.length >= 6) return;
+      // Insert new pick
+      const { data, error } = await supabase
+        .from('picks')
+        .insert({
+          user_id: userId,
+          game_id: game.id,
+          week: selectedWeek,
+          selected_team: team,
+          is_lock: shouldBeLock,
+        })
+        .select()
+        .single();
 
-      const hasExistingLock = picks.some((p) => p.is_lock);
-      const shouldBeLock = !isChaosWeek && !hasExistingLock && picks.length === 5;
-
-      await supabase.from('picks').insert({
-        user_id: userId,
-        game_id: gameId,
-        week: selectedWeek,
-        selected_team: team,
-        is_lock: shouldBeLock,
-      });
-      fetchUserPicks();
+      if (!error && data) {
+        setPicks((prev) => [...prev, data]);
+        fetchSeasonPickCounts();
+      }
     }
-    fetchSeasonTeamCounts();
   };
 
-  const isGameLocked = (kickoffTime: string) => {
-    return new Date() >= new Date(kickoffTime);
+  const handleToggleLockSlot = async (pickId: string, currentLockState: boolean) => {
+    if (selectedWeek === 18) return;
+    setStatusMsg(null);
+
+    // If making this pick the lock, unlock any existing lock first
+    if (!currentLockState) {
+      await supabase
+        .from('picks')
+        .update({ is_lock: false })
+        .eq('user_id', userId)
+        .eq('week', selectedWeek);
+    }
+
+    const { data, error } = await supabase
+      .from('picks')
+      .update({ is_lock: !currentLockState })
+      .eq('id', pickId)
+      .select()
+      .single();
+
+    if (!error) {
+      setPicks((prev) =>
+        prev.map((p) => ({
+          ...p,
+          is_lock: p.id === pickId ? !currentLockState : false,
+        }))
+      );
+    }
   };
 
   const isChaosWeek = selectedWeek === 18;
-  const lockPick = picks.find((p) => p.is_lock);
-  const nonLockPicks = picks.filter((p) => p.id !== lockPick?.id);
+  const requiredCount = isChaosWeek ? 16 : 6;
 
-  const orderedPicks: (Pick | null)[] = [
-    nonLockPicks[0] || null,
-    nonLockPicks[1] || null,
-    nonLockPicks[2] || null,
-    nonLockPicks[3] || null,
-    nonLockPicks[4] || null,
-    lockPick || nonLockPicks[5] || null,
-  ];
-
-  const pickSlots = Array.from({ length: 6 }, (_, index) => orderedPicks[index] || null);
-
-  const handleSlotClick = async (index: number) => {
-    if (isChaosWeek) return;
-    const currentSlotPick = pickSlots[index];
-
-    if (selectedSlotForSwap === null) {
-      if (currentSlotPick) {
-        setSelectedSlotForSwap(index);
-      }
-    } else {
-      if (selectedSlotForSwap === index) {
-        if (currentSlotPick) {
-          await deletePick(currentSlotPick.id);
-        }
-        setSelectedSlotForSwap(null);
-      } else {
-        const firstPick = pickSlots[selectedSlotForSwap];
-        const secondPick = pickSlots[index];
-
-        if (index === 5 || selectedSlotForSwap === 5) {
-          await supabase
-            .from('picks')
-            .update({ is_lock: false })
-            .eq('user_id', userId)
-            .eq('week', selectedWeek);
-        }
-
-        if (firstPick) {
-          await supabase
-            .from('picks')
-            .update({ is_lock: index === 5 })
-            .eq('id', firstPick.id);
-        }
-        if (secondPick) {
-          await supabase
-            .from('picks')
-            .update({ is_lock: selectedSlotForSwap === 5 })
-            .eq('id', secondPick.id);
-        }
-
-        setSelectedSlotForSwap(null);
-        await fetchUserPicks();
-      }
-    }
-  };
+  // Order picks so Lock is in 6th slot for bar rendering
+  const sortedPicksForBar = [...picks].sort((a, b) => {
+    if (a.is_lock) return 1;
+    if (b.is_lock) return -1;
+    return 0;
+  });
 
   return (
-    <div className="flex flex-col gap-4 pb-64 max-w-2xl mx-auto px-4 pt-4 text-white">
-      {/* Week Selector Bar */}
-      <div className="flex justify-between items-center bg-gray-900 p-2.5 rounded-xl border border-gray-800">
-        <div className="flex items-center gap-1.5">
+    <div className="flex flex-col gap-4 pb-36 max-w-2xl mx-auto px-4 pt-4 text-white">
+      {/* Week Navigation Header */}
+      <div className="flex justify-between items-center bg-gray-900 p-3 rounded-xl border border-gray-800 shadow-md">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              setSelectedWeek((prev) => Math.max(1, prev - 1));
-              setSelectedSlotForSwap(null);
-            }}
+            onClick={() => setSelectedWeek((prev) => Math.max(1, prev - 1))}
             disabled={selectedWeek <= 1}
-            className="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+            className="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
           >
             ◀
           </button>
 
           <select
             value={selectedWeek}
-            onChange={(e) => {
-              setSelectedWeek(Number(e.target.value));
-              setSelectedSlotForSwap(null);
-            }}
+            onChange={(e) => setSelectedWeek(Number(e.target.value))}
             className="bg-gray-800 text-xs font-bold text-white px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none"
           >
             {Array.from({ length: 18 }, (_, i) => i + 1).map((w) => (
               <option key={w} value={w}>
-                Week {w}
+                Week {w} {w === 18 ? '(Chaos Week)' : ''}
               </option>
             ))}
           </select>
 
           <button
-            onClick={() => {
-              setSelectedWeek((prev) => Math.min(18, prev + 1));
-              setSelectedSlotForSwap(null);
-            }}
+            onClick={() => setSelectedWeek((prev) => Math.min(18, prev + 1))}
             disabled={selectedWeek >= 18}
-            className="w-7 h-7 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
+            className="w-8 h-8 flex items-center justify-center bg-gray-800 hover:bg-gray-700 disabled:opacity-30 rounded-lg text-xs font-bold transition-colors"
           >
             ▶
           </button>
         </div>
 
-        <span className="text-[11px] font-semibold text-gray-400">
-          All Times Eastern
-        </span>
+        <div className="font-mono text-right">
+          <span className="text-xs font-bold text-emerald-400 block">
+            {picks.length}/{requiredCount} Selected
+          </span>
+          {!isChaosWeek && (
+            <span className="text-[10px] text-gray-400">
+              {picks.some((p) => p.is_lock) ? '🔒 Lock Set' : '⚠️ Lock Needed'}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Week 18 Chaos Week Banner */}
-      {isChaosWeek && (
-        <div className="bg-gradient-to-r from-purple-950/80 to-indigo-950/80 border-2 border-purple-500/80 p-4 rounded-xl shadow-2xl flex flex-col gap-1 text-center">
-          <h2 className="text-base font-black tracking-widest text-purple-300 uppercase">
-            🌀 CHAOS WEEK
-          </h2>
-          <p className="text-xs text-purple-200">
-            Welcome to Chaos Week. You must pick every game.
-          </p>
+      {statusMsg && (
+        <div className="bg-amber-950/80 border border-amber-500/50 text-amber-200 text-xs p-3 rounded-xl font-medium shadow-lg">
+          {statusMsg}
         </div>
       )}
 
-      {/* Matchup Schedule Cards */}
-      <div className="flex flex-col gap-3">
-        {games.map((game) => {
-          const locked = isGameLocked(game.kickoff_time);
-          const currentPick = picks.find((p) => p.game_id === game.id);
-          const homeNickname = getTeamNickname(game.home_team);
-          const awayNickname = getTeamNickname(game.away_team);
+      {/* Matchups List */}
+      {loading ? (
+        <div className="py-12 text-center text-xs text-gray-500 font-mono animate-pulse">
+          Loading matchups...
+        </div>
+      ) : games.length === 0 ? (
+        <div className="py-12 text-center text-xs text-gray-500">
+          No games scheduled for Week {selectedWeek}.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {games.map((game) => {
+            const pick = picks.find((p) => p.game_id === game.id);
+            const kickoff = new Date(game.kickoff_time);
+            const isLocked = new Date() >= kickoff;
 
-          return (
-            <div
-              key={game.id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2.5"
-            >
-              <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
-                <span>
-                  {new Date(game.kickoff_time).toLocaleDateString([], {
-                    weekday: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </span>
-                {locked && <span className="text-red-400 font-bold">🔒</span>}
-              </div>
+            return (
+              <div
+                key={game.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2 shadow-sm"
+              >
+                <div className="flex justify-between items-center text-[10px] text-gray-400 font-mono">
+                  <span>
+                    {kickoff.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} •{' '}
+                    {kickoff.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                  {isLocked ? (
+                    <span className="text-red-400 font-bold">LOCKED</span>
+                  ) : (
+                    <span className="text-emerald-400">OPEN</span>
+                  )}
+                </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { full: game.away_team, nick: awayNickname, record: game.away_record },
-                  { full: game.home_team, nick: homeNickname, record: game.home_record },
-                ].map((team) => {
-                  const isSelected = currentPick?.selected_team === team.full;
-                  const isLock = isSelected && currentPick?.is_lock;
-                  const count = teamPickCounts[team.full] || 0;
-                  const disabled = locked || (!isChaosWeek && count >= 6 && !isSelected);
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { name: game.away_team, rec: game.away_record, score: game.away_score },
+                    { name: game.home_team, rec: game.home_record, score: game.home_score },
+                  ].map((teamObj) => {
+                    const teamName = teamObj.name;
+                    const isSelected = pick?.selected_team === teamName;
+                    const isLock = isSelected && pick?.is_lock;
+                    const uses = userPickCounts[teamName] || 0;
 
-                  let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
-                  if (isSelected) {
-                    if (game.status === 'post') {
-                      if (team.full === game.winner_team) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
-                      else if (game.winner_team === 'TIE') btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
-                      else btnColor = 'bg-red-600/30 border-red-500 text-white font-bold';
-                    } else if (isLock) {
-                      btnColor = 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-lg ring-1 ring-amber-400/50';
-                    } else {
-                      btnColor = 'bg-blue-600/30 border-blue-500 text-white font-bold';
+                    let btnStyle = 'bg-gray-800/80 border-gray-700/80 text-gray-200 hover:bg-gray-800';
+                    if (isSelected) {
+                      btnStyle = isLock
+                        ? 'bg-amber-950/40 border-2 border-amber-400 text-amber-200 font-bold'
+                        : 'bg-emerald-950/40 border-2 border-emerald-500 text-emerald-200 font-bold';
                     }
-                  }
 
-                  return (
-                    <button
-                      key={team.full}
-                      disabled={disabled}
-                      onClick={() => handleSelectTeam(game.id, team.full)}
-                      className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${btnColor} ${
-                        disabled ? 'opacity-40 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <img
-                          src={getTeamLogoUrl(team.full)}
-                          alt={team.nick}
-                          className="w-6 h-6 object-contain flex-shrink-0"
-                        />
-                        <div className="flex flex-col items-start truncate">
-                          <span className="text-xs font-semibold truncate">{team.nick}</span>
-                          {!isChaosWeek && (
-                            <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
-                              Picked {count}/6
+                    return (
+                      <button
+                        key={teamName}
+                        disabled={isLocked}
+                        onClick={() => handleSelectTeam(game, teamName)}
+                        className={`p-2.5 rounded-xl border text-xs flex items-center justify-between transition-all ${btnStyle} ${
+                          isLocked ? 'opacity-70 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 pr-1">
+                          <img
+                            src={getTeamLogoUrl(teamName)}
+                            alt=""
+                            className="w-5 h-5 object-contain flex-shrink-0"
+                          />
+                          <div className="flex flex-col text-left min-w-0">
+                            <span className="font-bold truncate text-white">
+                              {getTeamNickname(teamName)}
                             </span>
-                          )}
+                            <span className="text-[9px] text-gray-400 font-mono">
+                              {teamObj.rec} • Used {uses}/6
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                      <span className={`text-[10px] font-mono font-medium flex-shrink-0 ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
-                        {team.record || '0-0'}
-                      </span>
-                    </button>
-                  );
-                })}
+
+                        {isSelected && (
+                          <span className="text-xs flex-shrink-0 font-bold">
+                            {isLock ? '🔒' : '✓'}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sticky Bottom Selected Picks Bar */}
+      <div className="fixed bottom-14 left-0 right-0 z-30 px-3 pointer-events-none">
+        <div className="max-w-md mx-auto flex flex-col gap-1 pointer-events-auto">
+          {/* Week 1 Lock Selection Helper Banner */}
+          {selectedWeek === 1 && (
+            <div className="bg-gray-900/95 backdrop-blur border border-amber-500/50 text-amber-300 text-[11px] font-medium px-3 py-1.5 rounded-xl shadow-lg flex items-center justify-center gap-1.5 text-center">
+              <span>💡</span>
+              <span>Tap a team below to move it into your Lock of the Week slot</span>
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      {/* Standard 6-Slot Bottom Widget */}
-      {!isChaosWeek && (
-        <div className="fixed bottom-[57px] left-0 right-0 z-30 bg-gray-950/95 backdrop-blur-lg border-t border-gray-800 px-4 py-2.5 shadow-2xl">
-          <div className="max-w-md mx-auto flex flex-col gap-1.5">
-            <div className="flex justify-between items-center px-1">
-              <h3 className="text-[11px] font-extrabold text-emerald-400 tracking-wider uppercase">
-                MY WEEK {selectedWeek} PICKS
-              </h3>
-              <span className="text-[9px] text-gray-400">
-                {selectedSlotForSwap !== null ? 'Tap target slot to swap/clear' : 'Tap slot to swap/clear'}
-              </span>
-            </div>
+          <div className="bg-gray-900/95 backdrop-blur-md border border-gray-800 p-2 rounded-2xl shadow-2xl flex items-center justify-between gap-1.5">
+            {Array.from({ length: 6 }).map((_, i) => {
+              const pick = sortedPicksForBar[i];
 
-            <div className="flex justify-between items-start gap-1.5">
-              {pickSlots.map((pick, i) => {
-                let game = games.find((g) => g.id === pick?.game_id) || pick?.games;
-                let isHome = game?.home_team === pick?.selected_team;
-                let opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
-                let oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
-                let oppPrefix = isHome ? 'vs' : '@';
-
-                let outcomeLabel = '?';
-                let outcomeColor = 'text-gray-500';
-                let slotBg = 'bg-white';
-
-                if (game?.status === 'post' && pick) {
-                  if (pick.selected_team === game.winner_team) {
-                    outcomeLabel = 'W';
-                    outcomeColor = 'text-emerald-400';
-                    slotBg = 'bg-emerald-100';
-                  } else if (game.winner_team === 'TIE') {
-                    outcomeLabel = 'T';
-                    outcomeColor = 'text-amber-400';
-                    slotBg = 'bg-amber-100';
-                  } else {
-                    outcomeLabel = 'L';
-                    outcomeColor = 'text-red-400';
-                    slotBg = 'bg-red-100';
-                  }
-                }
-
-                const isSlotLock = i === 5;
-                const isSelectedForSwap = selectedSlotForSwap === i;
-
+              if (!pick) {
+                const isSlot6 = i === 5;
                 return (
-                  <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
-                    <span className={`text-[10px] font-black ${outcomeColor}`}>
-                      {outcomeLabel}
-                    </span>
-
-                    <button
-                      onClick={() => handleSlotClick(i)}
-                      className={`w-full aspect-square max-w-[50px] rounded-xl border flex items-center justify-center p-0.5 relative shadow-md transition-transform active:scale-95 ${slotBg} ${
-                        isSelectedForSwap
-                          ? 'border-2 border-emerald-400 ring-4 ring-emerald-500/50 scale-105'
-                          : isSlotLock
-                          ? 'border-2 border-amber-400 ring-2 ring-amber-400/50'
-                          : 'border-gray-300'
-                      }`}
-                    >
-                      {pick ? (
-                        <img
-                          src={getTeamLogoUrl(pick.selected_team)}
-                          alt={pick.selected_team}
-                          className="w-9 h-9 object-contain"
-                        />
-                      ) : (
-                        <span className="text-gray-400 font-bold text-sm">?</span>
-                      )}
-
-                      {isSlotLock && (
-                        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 bg-gray-900 border-2 border-amber-400 rounded-full w-4 h-4 flex items-center justify-center shadow-md">
-                          <span className="text-[8px]">🔒</span>
-                        </div>
-                      )}
-                    </button>
-
-                    <span className="text-[8px] font-bold text-gray-400 truncate w-full text-center mt-1">
-                      {pick ? `${oppPrefix} ${oppAbbr}` : '-'}
-                    </span>
+                  <div
+                    key={i}
+                    className={`flex-1 h-12 rounded-xl border border-dashed flex flex-col items-center justify-center text-[10px] font-mono ${
+                      isSlot6
+                        ? 'border-amber-500/50 bg-amber-950/20 text-amber-400'
+                        : 'border-gray-700 bg-gray-800/40 text-gray-500'
+                    }`}
+                  >
+                    <span>{isSlot6 ? '🔒 LOCK' : `Pick ${i + 1}`}</span>
                   </div>
                 );
-              })}
-            </div>
+              }
+
+              return (
+                <button
+                  key={pick.id}
+                  onClick={() => handleToggleLockSlot(pick.id, pick.is_lock)}
+                  className={`flex-1 h-12 rounded-xl border p-1 flex flex-col items-center justify-center transition-all ${
+                    pick.is_lock
+                      ? 'bg-amber-950/40 border-2 border-amber-400 text-amber-200'
+                      : 'bg-gray-800 border-gray-700 text-gray-200 hover:border-gray-600'
+                  }`}
+                >
+                  <img
+                    src={getTeamLogoUrl(pick.selected_team)}
+                    alt=""
+                    className="w-5 h-5 object-contain"
+                  />
+                  <span className="text-[9px] font-bold truncate max-w-full mt-0.5">
+                    {pick.is_lock ? '🔒' : getTeamNickname(pick.selected_team)}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
