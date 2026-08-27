@@ -15,12 +15,25 @@ const ALL_NFL_TEAMS = [
   'Houston Texans', 'Tennessee Titans', 'Minnesota Vikings'
 ].sort((a, b) => getTeamNickname(a).localeCompare(getTeamNickname(b)));
 
+interface TeamStat {
+  team: string;
+  nick: string;
+  record: string;
+  picked: number;
+  lotw: number;
+  maxed: number;
+}
+
 export default function StatsTab() {
   const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('popular');
-  const [teamStats, setTeamRecords] = useState<any[]>([]);
+  const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
   const [perfectionData, setPerfectionData] = useState<any[]>([]);
   const [historyData, setHistoryData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Sorting state for Popular subtab
+  const [popularSortKey, setPopularSortKey] = useState<keyof TeamStat>('picked');
+  const [popularSortOrder, setPopularSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     fetchStats();
@@ -37,7 +50,7 @@ export default function StatsTab() {
       .from('games')
       .select('*');
 
-    // 1. Calculate Popular Team Stats strictly for completed games (status === 'post')
+    // 1. Calculate stats for COMPLETED GAMES ONLY (status === 'post')
     const completedPicks = (picks || []).filter((p) => p.games && p.games.status === 'post');
 
     const teamCounts: Record<string, { picked: number; lotw: number; maxed: number }> = {};
@@ -72,18 +85,31 @@ export default function StatsTab() {
       if (g.away_team && g.away_record) teamRecordMap[g.away_team] = g.away_record;
     });
 
-    const popularList = ALL_NFL_TEAMS.map((team) => ({
+    const popularList: TeamStat[] = ALL_NFL_TEAMS.map((team) => ({
       team,
       nick: getTeamNickname(team),
       record: teamRecordMap[team] || '0-0',
       picked: teamCounts[team].picked,
       lotw: teamCounts[team].lotw,
       maxed: teamCounts[team].maxed,
-    })).sort((a, b) => b.picked - a.picked || a.nick.localeCompare(b.nick));
+    }));
 
-    setTeamRecords(popularList);
+    // Client-side sort applying current key and order
+    popularList.sort((a, b) => {
+      const aVal = a[popularSortKey];
+      const bVal = b[popularSortKey];
 
-    // 2. Perfection Stats (Users with 6-0 weeks in completed weeks)
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return popularSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return popularSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      return 0;
+    });
+
+    setTeamStats(popularList);
+
+    // 2. Perfection Stats (Users with 6-0 completed weeks)
     const userWeekStats: Record<string, Record<number, { wins: number; total: number; profile: any }>> = {};
 
     completedPicks.forEach((p) => {
@@ -117,7 +143,7 @@ export default function StatsTab() {
 
     setPerfectionData(perfectionList.sort((a, b) => a.week - b.week));
 
-    // 3. History Stats (Completed weeks overview)
+    // 3. History Stats (completed weeks only)
     const weekSummaries: Record<number, { completedGames: number; totalPicks: number }> = {};
     (games || []).forEach((g) => {
       if (g.status === 'post') {
@@ -142,8 +168,25 @@ export default function StatsTab() {
     setLoading(false);
   };
 
+  const handleSortPopular = (key: keyof TeamStat) => {
+    if (key === popularSortKey) {
+      setPopularSortOrder(popularSortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setPopularSortKey(key);
+      setPopularSortOrder('desc');
+    }
+  };
+
+  const getSortIcon = (key: keyof TeamStat) => {
+    if (popularSortKey === key) {
+      return popularSortOrder === 'asc' ? '↑' : '↓';
+    }
+    return '';
+  };
+
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
+      {/* Subtab Navigator */}
       <div className="flex justify-center gap-2 bg-gray-900 p-1.5 rounded-xl border border-gray-800">
         <button
           onClick={() => setSubTab('perfection')}
@@ -177,35 +220,43 @@ export default function StatsTab() {
         </div>
       ) : subTab === 'popular' ? (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
-          <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
-            <span className="text-xs font-bold text-gray-400">Team Popularity (Completed Weeks Only)</span>
-            <span className="text-[10px] text-emerald-400 font-mono font-semibold">Active Season</span>
-          </div>
-
-          <table className="w-full text-left border-collapse">
+          {/* Fix: Table Layout Prevent Overrun */}
+          <table className="w-full text-left border-collapse table-fixed">
             <thead>
+              {/* Fix: Column Header Layout and Sorting */}
               <tr className="border-b border-gray-800 text-[11px] font-bold text-gray-400 bg-gray-900/50">
-                <th className="py-2.5 px-4">Team</th>
-                <th className="py-2.5 px-3 text-center">Picked ↓</th>
-                <th className="py-2.5 px-3 text-center">LOTW</th>
-                <th className="py-2.5 px-4 text-center">Maxed</th>
+                <th className="py-3 px-4 w-[40%] cursor-pointer" onClick={() => handleSortPopular('nick')}>
+                  Team {getSortIcon('nick')}
+                </th>
+                <th className="py-3 px-3 text-center w-[20%] cursor-pointer" onClick={() => handleSortPopular('picked')}>
+                  Picked {getSortIcon('picked')}
+                </th>
+                <th className="py-3 px-3 text-center w-[20%] cursor-pointer" onClick={() => handleSortPopular('lotw')}>
+                  LOTW {getSortIcon('lotw')}
+                </th>
+                <th className="py-3 px-4 text-center w-[20%] cursor-pointer" onClick={() => handleSortPopular('maxed')}>
+                  Maxed {getSortIcon('maxed')}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/60 text-xs">
               {teamStats.map((item) => (
                 <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
-                  <td className="py-2.5 px-4 font-bold text-white flex items-center gap-2">
-                    <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain" />
-                    <span>{item.nick}</span>
-                    <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+                  <td className="py-3 px-4 font-bold text-white flex items-center gap-2 min-w-0">
+                    <img src={getTeamLogoUrl(item.team)} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
+                    {/* Fix: Buccaneers Overrun Text with Truncate */}
+                    <div className="flex flex-col truncate">
+                      <span className="truncate">{item.nick}</span>
+                      <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+                    </div>
                   </td>
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-400">
+                  <td className="py-3 px-3 text-center font-mono font-bold text-emerald-400">
                     {item.picked}
                   </td>
-                  <td className="py-2.5 px-3 text-center font-mono font-bold text-amber-400">
+                  <td className="py-3 px-3 text-center font-mono font-bold text-amber-400">
                     {item.lotw}
                   </td>
-                  <td className="py-2.5 px-4 text-center font-mono font-bold text-indigo-400">
+                  <td className="py-3 px-4 text-center font-mono font-bold text-indigo-400">
                     {item.maxed}
                   </td>
                 </tr>
@@ -219,12 +270,12 @@ export default function StatsTab() {
             <span>🏆</span> Hall of Perfection
           </h3>
           <p className="text-xs text-gray-400">
-            Members who achieved an unblemished 6-0 (or 16-0) record in completed weeks this season.
+            Members who achieved an unblemished 6-0 (or 16-0) record this season.
           </p>
 
           {perfectionData.length === 0 ? (
             <div className="py-8 text-center text-xs text-gray-500 font-mono">
-              No perfect weeks recorded yet. Check back after completed games!
+              No perfect weeks recorded yet.
             </div>
           ) : (
             <div className="flex flex-col gap-2 mt-1">
@@ -265,7 +316,7 @@ export default function StatsTab() {
 
           {historyData.length === 0 ? (
             <div className="py-8 text-center text-xs text-gray-500 font-mono">
-              No completed weeks available yet.
+              No completed weeks available.
             </div>
           ) : (
             <div className="flex flex-col gap-2">
