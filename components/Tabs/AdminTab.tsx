@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
+import WeeklyRecapModal from '@/components/Modals/WeeklyRecapModal';
 
 interface AdminTabProps {
   currentWeek?: number;
@@ -25,6 +26,9 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
   const [userPicks, setUserPicks] = useState<any[]>([]);
   const [allWeekPicks, setAllWeekPicks] = useState<any[]>([]);
   const [adminActionStatus, setAdminActionStatus] = useState<string | null>(null);
+
+  // Recap Preview Modal State
+  const [isPreviewRecapOpen, setIsPreviewRecapOpen] = useState(false);
 
   useEffect(() => {
     if (currentWeek) setSelectedWeek(currentWeek);
@@ -244,12 +248,20 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
-        <button
-          onClick={handleExportCSV}
-          className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
-        >
-          <span>📥</span> Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsPreviewRecapOpen(true)}
+            className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
+          >
+            <span>👁️</span> Preview Recap
+          </button>
+          <button
+            onClick={handleExportCSV}
+            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
+          >
+            <span>📥</span> Export CSV
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-1.5 border-b border-gray-800 pb-2 overflow-x-auto">
@@ -621,6 +633,16 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
             {syncing ? 'Syncing Weeks 1-18...' : 'Sync Schedule Now'}
           </button>
         </div>
+      )}
+
+      {/* Recap Preview Modal */}
+      {selectedUserId && (
+        <WeeklyRecapModal
+          isOpen={isPreviewRecapOpen}
+          onClose={() => setIsPreviewRecapOpen(false)}
+          userId={selectedUserId}
+          week={selectedWeek}
+        />
       )}
     </div>
   );
