@@ -28,7 +28,7 @@ export default function StatsTab() {
   const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('popular');
   const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
   const [perfectionData, setPerfectionData] = useState<any[]>([]);
-  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [shameData, setShameData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Sorting state for Popular subtab
@@ -96,66 +96,65 @@ export default function StatsTab() {
 
     setTeamStats(popularList);
 
-    // 2. Perfection Stats (Users with 6-0 completed weeks)
-    const userWeekStats: Record<string, Record<number, { wins: number; total: number; profile: any }>> = {};
+    // 2. Perfection & Zero Points (Shame) Calculations
+    const userWeekStats: Record<string, Record<number, { wins: number; total: number; points: number; profile: any }>> = {};
 
     completedPicks.forEach((p) => {
       const uId = p.user_id;
       const wk = p.week;
       if (!userWeekStats[uId]) userWeekStats[uId] = {};
       if (!userWeekStats[uId][wk]) {
-        userWeekStats[uId][wk] = { wins: 0, total: 0, profile: p.profiles };
+        userWeekStats[uId][wk] = { wins: 0, total: 0, points: 0, profile: p.profiles };
       }
 
       userWeekStats[uId][wk].total += 1;
-      if (p.games?.winner_team === p.selected_team) {
+      const isWin = p.games?.winner_team === p.selected_team;
+
+      if (isWin) {
         userWeekStats[uId][wk].wins += 1;
+        userWeekStats[uId][wk].points += p.is_lock && wk !== 18 ? 2 : 1;
+      } else if (p.is_lock && wk !== 18) {
+        userWeekStats[uId][wk].points -= 1;
       }
     });
 
-    const perfectionList: any[] = [];
+    const perfList: any[] = [];
+    const zeroList: any[] = [];
+
     Object.entries(userWeekStats).forEach(([uId, weekMap]) => {
       Object.entries(weekMap).forEach(([wkStr, stat]) => {
         const wkNum = Number(wkStr);
         const req = wkNum === 18 ? 16 : 6;
-        if (stat.total === req && stat.wins === req) {
-          perfectionList.push({
-            user_id: uId,
-            profile: stat.profile,
-            week: wkNum,
-          });
+
+        if (stat.total === req) {
+          if (stat.wins === req) {
+            perfList.push({
+              user_id: uId,
+              profile: stat.profile,
+              week: wkNum,
+              points: stat.points,
+            });
+          }
+          if (stat.points <= 0) {
+            zeroList.push({
+              user_id: uId,
+              profile: stat.profile,
+              week: wkNum,
+              points: stat.points,
+              wins: stat.wins,
+            });
+          }
         }
       });
     });
 
-    setPerfectionData(perfectionList.sort((a, b) => a.week - b.week));
+    setPerfectionData(perfList.sort((a, b) => a.week - b.week));
+    setShameData(zeroList.sort((a, b) => a.week - b.week));
 
-    // 3. History Stats (completed weeks only)
-    const weekSummaries: Record<number, { completedGames: number; totalPicks: number }> = {};
-    (games || []).forEach((g) => {
-      if (g.status === 'post') {
-        if (!weekSummaries[g.week]) weekSummaries[g.week] = { completedGames: 0, totalPicks: 0 };
-        weekSummaries[g.week].completedGames += 1;
-      }
-    });
-
-    completedPicks.forEach((p) => {
-      if (weekSummaries[p.week]) {
-        weekSummaries[p.week].totalPicks += 1;
-      }
-    });
-
-    const histList = Object.entries(weekSummaries).map(([wk, data]) => ({
-      week: Number(wk),
-      completedGames: data.completedGames,
-      totalPicks: data.totalPicks,
-    })).sort((a, b) => b.week - a.week);
-
-    setHistoryData(histList);
     setLoading(false);
   };
 
-  // Re-sort data dynamically on sort key or order change
+  // Re-sort Popular table dynamically
   const sortedTeamStats = useMemo(() => {
     return [...teamStats].sort((a, b) => {
       const aVal = a[popularSortKey];
@@ -168,7 +167,6 @@ export default function StatsTab() {
         if (aVal !== bVal) {
           return popularSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
         }
-        // Tie-breaker: alphabetical by nickname
         return a.nick.localeCompare(b.nick);
       }
       return 0;
@@ -294,75 +292,142 @@ export default function StatsTab() {
           </table>
         </div>
       ) : subTab === 'perfection' ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
-          <h3 className="font-extrabold text-sm text-amber-400 flex items-center gap-2">
-            <span>🏆</span> Hall of Perfection
-          </h3>
-          <p className="text-xs text-gray-400">
-            Members who achieved an unblemished 6-0 (or 16-0) record this season.
-          </p>
+        <div className="flex flex-col gap-4">
+          {/* Hall of Perfection */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
+            <h3 className="font-extrabold text-sm text-amber-400 flex items-center gap-2">
+              <span>🏆</span> Hall of Perfection
+            </h3>
+            <p className="text-xs text-gray-400">
+              Members who achieved an unblemished 6-0 (or 16-0) record in a week.
+            </p>
 
-          {perfectionData.length === 0 ? (
-            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-              No perfect weeks recorded yet.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2 mt-1">
-              {perfectionData.map((item, idx) => (
-                <div
-                  key={idx}
-                  className="bg-amber-950/20 border border-amber-500/40 p-3 rounded-xl flex justify-between items-center"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center font-bold text-xs text-amber-300">
-                      {item.profile?.avatar_url ? (
-                        <img src={item.profile.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
-                      ) : (
-                        `${item.profile?.first_name?.slice(0, 1) || ''}${item.profile?.last_name?.slice(0, 1) || ''}`
-                      )}
+            {perfectionData.length === 0 ? (
+              <div className="py-6 text-center text-xs text-gray-500 font-mono">
+                No perfect weeks recorded yet.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 mt-1">
+                {perfectionData.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-amber-950/20 border border-amber-500/40 p-3 rounded-xl flex justify-between items-center"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center font-bold text-xs text-amber-300">
+                        {item.profile?.avatar_url ? (
+                          <img src={item.profile.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          `${item.profile?.first_name?.slice(0, 1) || ''}${item.profile?.last_name?.slice(0, 1) || ''}`
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-bold text-xs text-white block">{item.profile?.team_name}</span>
+                        <span className="text-[10px] text-gray-400">
+                          {item.profile?.first_name} {item.profile?.last_name}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="font-bold text-xs text-white block">{item.profile?.team_name}</span>
-                      <span className="text-[10px] text-gray-400">
-                        {item.profile?.first_name} {item.profile?.last_name}
-                      </span>
-                    </div>
+
+                    <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                      Week {item.week} Perfect
+                    </span>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">
-                    Week {item.week} Perfect
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Hall of Shame / Goose Egg (0 Point Weeks) */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
+            <h3 className="font-extrabold text-sm text-red-400 flex items-center gap-2">
+              <span>🦆</span> Zero Point Weeks (Goose Egg)
+            </h3>
+            <p className="text-xs text-gray-400">
+              Members who scored 0 or fewer points in a completed week.
+            </p>
+
+            {shameData.length === 0 ? (
+              <div className="py-6 text-center text-xs text-gray-500 font-mono">
+                No zero-point weeks recorded yet!
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 mt-1">
+                {shameData.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-red-950/20 border border-red-500/40 p-3 rounded-xl flex justify-between items-center"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-red-500/20 border border-red-400/50 flex items-center justify-center font-bold text-xs text-red-300">
+                        {item.profile?.avatar_url ? (
+                          <img src={item.profile.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          `${item.profile?.first_name?.slice(0, 1) || ''}${item.profile?.last_name?.slice(0, 1) || ''}`
+                        )}
+                      </div>
+                      <div>
+                        <span className="font-bold text-xs text-white block">{item.profile?.team_name}</span>
+                        <span className="text-[10px] text-gray-400">
+                          {item.profile?.first_name} {item.profile?.last_name}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="text-xs font-mono font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/30">
+                      Week {item.week} • {item.points} pts
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
-          <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-            <span>📜</span> Completed Weeks Overview
-          </h3>
-
-          {historyData.length === 0 ? (
-            <div className="py-8 text-center text-xs text-gray-500 font-mono">
-              No completed weeks available.
+        /* History Subtab: Restored Past Champions Showcase */
+        <div className="flex flex-col gap-4">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
+                <span>🏆</span> League History & Champions
+              </h3>
+              <span className="text-[10px] font-mono text-gray-400">Roll of Honor</span>
             </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {historyData.map((item) => (
-                <div
-                  key={item.week}
-                  className="bg-gray-800/80 border border-gray-700/80 p-3 rounded-xl flex justify-between items-center text-xs"
-                >
-                  <span className="font-bold text-white">Week {item.week}</span>
-                  <div className="flex gap-4 font-mono text-gray-300">
-                    <span>{item.completedGames} Games Final</span>
-                    <span className="text-emerald-400 font-bold">{item.totalPicks} Picks</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* 2025 Champion Card */}
+              <div className="bg-gradient-to-br from-amber-950/40 to-gray-900 border-2 border-amber-400/60 p-4 rounded-xl flex flex-col gap-2 relative shadow-lg">
+                <span className="text-[10px] font-mono font-extrabold text-amber-400 uppercase tracking-widest">
+                  2025 Champion
+                </span>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center font-black text-amber-300 text-sm">
+                    🏆
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white">To Be Crowned</h4>
+                    <p className="text-xs text-gray-400">2025 Season</p>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              {/* 2024 Champion Card */}
+              <div className="bg-gradient-to-br from-indigo-950/40 to-gray-900 border-2 border-indigo-400/60 p-4 rounded-xl flex flex-col gap-2 relative shadow-lg">
+                <span className="text-[10px] font-mono font-extrabold text-indigo-400 uppercase tracking-widest">
+                  2024 Champion
+                </span>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="w-10 h-10 rounded-full bg-indigo-500/20 border-2 border-indigo-400 flex items-center justify-center font-black text-indigo-300 text-sm">
+                    👑
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm text-white">Inaugural Season</h4>
+                    <p className="text-xs text-gray-400">2024 Season</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>
