@@ -5,10 +5,6 @@ async function syncSchedule() {
   const seasonYear = 2026;
   let totalImported = 0;
 
-  // Clear existing games to prevent lingering preseason duplicates
-  await supabaseAdmin.from('picks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  await supabaseAdmin.from('games').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
   for (let w = 1; w <= 18; w++) {
     const res = await fetch(
       `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${seasonYear}&seasontype=2&week=${w}`,
@@ -65,19 +61,10 @@ async function syncSchedule() {
     }
   }
 
-  return `Successfully imported ${totalImported} regular season games!`;
+  return `Successfully synced ${totalImported} games without touching user picks!`;
 }
 
 export async function POST() {
-  try {
-    const message = await syncSchedule();
-    return NextResponse.json({ success: true, message });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
-}
-
-export async function GET() {
   try {
     const message = await syncSchedule();
     return NextResponse.json({ success: true, message });
