@@ -28,25 +28,45 @@ export default function TeamsAvailableModal({
   userId,
 }: TeamsAvailableModalProps) {
   const [teamPicksMap, setTeamPicksMap] = useState<Record<string, any[]>>({});
+  const [teamRecordsMap, setTeamRecordsMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (isOpen && userId) {
-      fetchUserPicks();
+      fetchUserPicksAndRecords();
     }
   }, [isOpen, userId]);
 
-  const fetchUserPicks = async () => {
-    const { data } = await supabase
+  const fetchUserPicksAndRecords = async () => {
+    // 1. Fetch picks for this user
+    const { data: pickData } = await supabase
       .from('picks')
       .select('*, games(*)')
       .eq('user_id', userId);
 
-    const map: Record<string, any[]> = {};
-    (data || []).forEach((p) => {
-      if (!map[p.selected_team]) map[p.selected_team] = [];
-      map[p.selected_team].push(p);
+    const pickMap: Record<string, any[]> = {};
+    (pickData || []).forEach((p) => {
+      if (!pickMap[p.selected_team]) pickMap[p.selected_team] = [];
+      pickMap[p.selected_team].push(p);
     });
-    setTeamPicksMap(map);
+    setTeamPicksMap(pickMap);
+
+    // 2. Fetch latest NFL team records from games table
+    const { data: gameData } = await supabase
+      .from('games')
+      .select('home_team, away_team, home_record, away_record, kickoff_time')
+      .order('kickoff_time', { ascending: false });
+
+    const recMap: Record<string, string> = {};
+    (gameData || []).forEach((g) => {
+      if (g.home_team && !recMap[g.home_team] && g.home_record) {
+        recMap[g.home_team] = g.home_record;
+      }
+      if (g.away_team && !recMap[g.away_team] && g.away_record) {
+        recMap[g.away_team] = g.away_record;
+      }
+    });
+
+    setTeamRecordsMap(recMap);
   };
 
   if (!isOpen) return null;
@@ -70,6 +90,7 @@ export default function TeamsAvailableModal({
           {ALL_NFL_TEAMS.map((teamFullName) => {
             const picks = teamPicksMap[teamFullName] || [];
             const nick = getTeamNickname(teamFullName);
+            const recordStr = teamRecordsMap[teamFullName] || '0-0';
             const isMaxedOut = picks.length >= 6;
 
             return (
@@ -87,10 +108,11 @@ export default function TeamsAvailableModal({
                     alt=""
                     className="w-4 h-4 sm:w-5 sm:h-5 object-contain flex-shrink-0"
                   />
-                  <span className="font-bold text-xs truncate">{nick}</span>
+                  <span className="font-bold text-xs truncate">
+                    {nick} <span className="text-[11px] font-mono text-gray-400 font-normal">({recordStr})</span>
+                  </span>
                 </div>
 
-                {/* 6 Fixed Compact Boxes */}
                 <div className="flex items-center gap-1 sm:gap-1.5 flex-shrink-0">
                   {Array.from({ length: 6 }).map((_, i) => {
                     const pick = picks[i];
