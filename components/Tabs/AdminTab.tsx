@@ -13,15 +13,12 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  // User Roster State
   const [profiles, setProfiles] = useState<any[]>([]);
 
-  // Invites State
   const [inviteEmail, setInviteEmail] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<string | null>(null);
 
-  // Manage Picks & Weekly Status State
   const [selectedWeek, setSelectedWeek] = useState<number>(currentWeek);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [weekGames, setWeekGames] = useState<any[]>([]);
@@ -119,6 +116,20 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
 
     setInviteStatus(`Opened email client to send invite to ${inviteEmail}`);
     setInviteEmail('');
+  };
+
+  const handleDeleteProfile = async (userId: string, teamName: string) => {
+    if (!confirm(`Are you sure you want to remove "${teamName}"? This will permanently delete their profile and picks.`)) return;
+
+    await supabase.from('picks').delete().eq('user_id', userId);
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+
+    if (error) {
+      alert(`Error removing profile: ${error.message}`);
+    } else {
+      alert(`Successfully removed ${teamName}`);
+      fetchProfiles();
+    }
   };
 
   const handleExportCSV = async () => {
@@ -241,7 +252,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </button>
       </div>
 
-      {/* Subtabs Navigation */}
       <div className="flex gap-1.5 border-b border-gray-800 pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('status')}
@@ -277,10 +287,8 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </button>
       </div>
 
-      {/* Subtab 1: Weekly Status */}
       {activeSubTab === 'status' && (
         <div className="flex flex-col gap-4">
-          {/* Week Selector Bar */}
           <div className="flex justify-between items-center bg-gray-900 p-3 rounded-xl border border-gray-800">
             <div className="flex items-center gap-2">
               <button
@@ -317,7 +325,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
             </span>
           </div>
 
-          {/* League Roster Submission Status Cards */}
           <div className="flex flex-col gap-2">
             {memberStatusList.map(({ profile: p, count, isComplete }) => (
               <div
@@ -361,7 +368,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </div>
       )}
 
-      {/* Subtab 2: Manage User Picks */}
       {activeSubTab === 'picks' && (
         <div className="flex flex-col gap-4">
           <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-3">
@@ -494,7 +500,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </div>
       )}
 
-      {/* Subtab 3: Invites & Roster */}
       {activeSubTab === 'invites' && (
         <div className="flex flex-col gap-4">
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-2">
@@ -569,9 +574,17 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
                     </div>
                   </div>
 
-                  <span className="text-[10px] text-gray-400 font-mono">
-                    Joined {new Date(p.created_at || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      Joined {new Date(p.created_at || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteProfile(p.id, p.team_name)}
+                      className="bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/50 text-[10px] font-bold px-2 py-1 rounded transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -579,7 +592,6 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </div>
       )}
 
-      {/* Subtab 4: Schedule Sync */}
       {activeSubTab === 'schedule' && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex flex-col gap-3">
           <div>
