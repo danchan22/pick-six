@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamLogoUrl, getTeamNickname } from '@/lib/nflTeams';
 
@@ -94,19 +94,6 @@ export default function StatsTab() {
       maxed: teamCounts[team].maxed,
     }));
 
-    // Client-side sort applying current key and order
-    popularList.sort((a, b) => {
-      const aVal = a[popularSortKey];
-      const bVal = b[popularSortKey];
-
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return popularSortOrder === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return popularSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      return 0;
-    });
-
     setTeamStats(popularList);
 
     // 2. Perfection Stats (Users with 6-0 completed weeks)
@@ -168,20 +155,33 @@ export default function StatsTab() {
     setLoading(false);
   };
 
+  // Re-sort data dynamically on sort key or order change
+  const sortedTeamStats = useMemo(() => {
+    return [...teamStats].sort((a, b) => {
+      const aVal = a[popularSortKey];
+      const bVal = b[popularSortKey];
+
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        const comp = aVal.localeCompare(bVal);
+        return popularSortOrder === 'asc' ? comp : -comp;
+      } else if (typeof aVal === 'number' && typeof bVal === 'number') {
+        if (aVal !== bVal) {
+          return popularSortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        // Tie-breaker: alphabetical by nickname
+        return a.nick.localeCompare(b.nick);
+      }
+      return 0;
+    });
+  }, [teamStats, popularSortKey, popularSortOrder]);
+
   const handleSortPopular = (key: keyof TeamStat) => {
     if (key === popularSortKey) {
-      setPopularSortOrder(popularSortOrder === 'asc' ? 'desc' : 'asc');
+      setPopularSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setPopularSortKey(key);
-      setPopularSortOrder('desc');
+      setPopularSortOrder(key === 'nick' ? 'asc' : 'desc');
     }
-  };
-
-  const getSortIcon = (key: keyof TeamStat) => {
-    if (popularSortKey === key) {
-      return popularSortOrder === 'asc' ? '↑' : '↓';
-    }
-    return '';
   };
 
   return (
@@ -220,43 +220,72 @@ export default function StatsTab() {
         </div>
       ) : subTab === 'popular' ? (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
-          {/* Fix: Table Layout Prevent Overrun */}
           <table className="w-full text-left border-collapse table-fixed">
             <thead>
-              {/* Fix: Column Header Layout and Sorting */}
               <tr className="border-b border-gray-800 text-[11px] font-bold text-gray-400 bg-gray-900/50">
-                <th className="py-3 px-4 w-[40%] cursor-pointer" onClick={() => handleSortPopular('nick')}>
-                  Team {getSortIcon('nick')}
+                <th
+                  className="py-3 px-4 w-[38%] cursor-pointer whitespace-nowrap select-none"
+                  onClick={() => handleSortPopular('nick')}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Team</span>
+                    {popularSortKey === 'nick' && (
+                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center w-[20%] cursor-pointer" onClick={() => handleSortPopular('picked')}>
-                  Picked {getSortIcon('picked')}
+                <th
+                  className="py-3 px-2 text-center w-[20%] cursor-pointer whitespace-nowrap select-none"
+                  onClick={() => handleSortPopular('picked')}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Picked</span>
+                    {popularSortKey === 'picked' && (
+                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center w-[20%] cursor-pointer" onClick={() => handleSortPopular('lotw')}>
-                  LOTW {getSortIcon('lotw')}
+                <th
+                  className="py-3 px-2 text-center w-[21%] cursor-pointer whitespace-nowrap select-none"
+                  onClick={() => handleSortPopular('lotw')}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>LOTW</span>
+                    {popularSortKey === 'lotw' && (
+                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
-                <th className="py-3 px-4 text-center w-[20%] cursor-pointer" onClick={() => handleSortPopular('maxed')}>
-                  Maxed {getSortIcon('maxed')}
+                <th
+                  className="py-3 px-2 text-center w-[21%] cursor-pointer whitespace-nowrap select-none"
+                  onClick={() => handleSortPopular('maxed')}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Maxed</span>
+                    {popularSortKey === 'maxed' && (
+                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </div>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/60 text-xs">
-              {teamStats.map((item) => (
+              {sortedTeamStats.map((item) => (
                 <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
                   <td className="py-3 px-4 font-bold text-white flex items-center gap-2 min-w-0">
                     <img src={getTeamLogoUrl(item.team)} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
-                    {/* Fix: Buccaneers Overrun Text with Truncate */}
-                    <div className="flex flex-col truncate">
+                    <div className="flex flex-col truncate min-w-0">
                       <span className="truncate">{item.nick}</span>
                       <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
                     </div>
                   </td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-emerald-400">
+                  <td className="py-3 px-2 text-center font-mono font-bold text-emerald-400">
                     {item.picked}
                   </td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-amber-400">
+                  <td className="py-3 px-2 text-center font-mono font-bold text-amber-400">
                     {item.lotw}
                   </td>
-                  <td className="py-3 px-4 text-center font-mono font-bold text-indigo-400">
+                  <td className="py-3 px-2 text-center font-mono font-bold text-indigo-400">
                     {item.maxed}
                   </td>
                 </tr>
