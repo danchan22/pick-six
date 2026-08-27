@@ -384,48 +384,35 @@ export default function StatsTab() {
           </div>
         </div>
       ) : (
-        /* History Subtab: Restored Past Champions Showcase */
-        <div className="flex flex-col gap-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-              <h3 className="font-extrabold text-base text-amber-400 flex items-center gap-2">
-                <span>🏆</span> League History & Champions
-              </h3>
-              <span className="text-[10px] font-mono text-gray-400">Roll of Honor</span>
+        /* Subtab 3: History */
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-gray-400">Celebrate our league&apos;s past champions.</p>
+
+          <div className="bg-gradient-to-r from-amber-950/60 to-yellow-950/60 border-2 border-amber-400 rounded-2xl p-4 shadow-xl flex justify-between items-center">
+            <div>
+              <span className="text-xs font-mono font-extrabold text-amber-400">2025 CHAMPION</span>
+              <h4 className="text-lg font-extrabold text-white flex items-center gap-1.5">
+                Mandie 🏆
+              </h4>
             </div>
+            <span className="font-mono font-bold text-amber-300 text-sm bg-black/40 px-3 py-1 rounded-lg border border-amber-400/40">
+              80-21
+            </span>
+          </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* 2025 Champion Card */}
-              <div className="bg-gradient-to-br from-amber-950/40 to-gray-900 border-2 border-amber-400/60 p-4 rounded-xl flex flex-col gap-2 relative shadow-lg">
-                <span className="text-[10px] font-mono font-extrabold text-amber-400 uppercase tracking-widest">
-                  2025 Champion
-                </span>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="w-10 h-10 rounded-full bg-amber-500/20 border-2 border-amber-400 flex items-center justify-center font-black text-amber-300 text-sm">
-                    🏆
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-white">To Be Crowned</h4>
-                    <p className="text-xs text-gray-400">2025 Season</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* 2024 Champion Card */}
-              <div className="bg-gradient-to-br from-indigo-950/40 to-gray-900 border-2 border-indigo-400/60 p-4 rounded-xl flex flex-col gap-2 relative shadow-lg">
-                <span className="text-[10px] font-mono font-extrabold text-indigo-400 uppercase tracking-widest">
-                  2024 Champion
-                </span>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="w-10 h-10 rounded-full bg-indigo-500/20 border-2 border-indigo-400 flex items-center justify-center font-black text-indigo-300 text-sm">
-                    👑
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-white">Inaugural Season</h4>
-                    <p className="text-xs text-gray-400">2024 Season</p>
-                  </div>
-                </div>
-              </div>
+          <div className="bg-gradient-to-r from-amber-950/60 to-yellow-950/60 border-2 border-amber-400 rounded-2xl p-4 shadow-xl flex flex-col gap-2">
+            <span className="text-xs font-mono font-extrabold text-amber-400">2024 CO-CHAMPIONS</span>
+            <div className="flex justify-between items-center border-b border-amber-500/20 pb-1.5">
+              <h4 className="text-sm font-bold text-white flex items-center gap-1">
+                Rick 🏆
+              </h4>
+              <span className="font-mono font-bold text-amber-300 text-xs">73-17</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <h4 className="text-sm font-bold text-white flex items-center gap-1">
+                Lindsay 🏆
+              </h4>
+              <span className="font-mono font-bold text-amber-300 text-xs">73-17</span>
             </div>
           </div>
         </div>
