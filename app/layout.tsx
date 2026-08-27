@@ -1,18 +1,14 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-import type { Viewport } from 'next';
-
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-};
-
 export const metadata: Metadata = {
   title: 'Pick Six | NFL Pick Em League',
   description: '6-0 or bust.',
+  icons: {
+    icon: '/pick-six-logo.png',
+    shortcut: '/pick-six-logo.png',
+    apple: '/pick-six-logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -21,10 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-gray-950 text-white antialiased min-h-screen">
-        {children}
-      </body>
+    <html lang="en">
+      <body className="bg-gray-950 text-white antialiased">{children}</body>
     </html>
   );
 }
