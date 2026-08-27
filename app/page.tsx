@@ -33,7 +33,6 @@ export default function Home() {
   const [hasLock, setHasLock] = useState(false);
 
   useEffect(() => {
-    // Explicitly guarantee user menu starts closed
     setUserMenuOpen(false);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -61,21 +60,20 @@ export default function Home() {
   };
 
   const fetchCurrentWeek = async () => {
-    const now = new Date().toISOString();
-
-    // Query specifically for regular season games
+    // Active week is the earliest NFL week (1-18) where games are not yet finalized ('post')
     const { data } = await supabase
       .from('games')
       .select('week')
-      .eq('season_year', 2026)
-      .gte('kickoff_time', now)
-      .order('kickoff_time', { ascending: true })
+      .neq('status', 'post')
+      .gte('week', 1)
+      .lte('week', 18)
+      .order('week', { ascending: true })
       .limit(1);
 
     const activeW = data && data.length > 0 ? data[0].week : 1;
     setCurrentWeek(activeW);
 
-    // Only trigger auto-recap if regular season is underway (e.g. activeW > 1)
+    // Auto-trigger weekly recap ONLY when Week 1 finishes and user transitions to Week 2+
     if (activeW > 1) {
       const prevW = activeW - 1;
       const seenKey = `picksix_recap_seen_week_${prevW}`;
