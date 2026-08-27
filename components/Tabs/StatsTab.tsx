@@ -2,129 +2,152 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
+import { getTeamLogoUrl, getTeamNickname } from '@/lib/nflTeams';
 
 const ALL_NFL_TEAMS = [
-  'Arizona Cardinals', 'Atlanta Falcons', 'Baltimore Ravens', 'Buffalo Bills',
-  'Carolina Panthers', 'Chicago Bears', 'Cincinnati Bengals', 'Cleveland Browns',
-  'Dallas Cowboys', 'Denver Broncos', 'Detroit Lions', 'Green Bay Packers',
-  'Houston Texans', 'Indianapolis Colts', 'Jacksonville Jaguars', 'Kansas City Chiefs',
-  'Las Vegas Raiders', 'Los Angeles Chargers', 'Los Angeles Rams', 'Miami Dolphins',
-  'Minnesota Vikings', 'New England Patriots', 'New Orleans Saints', 'New York Giants',
-  'New York Jets', 'Philadelphia Eagles', 'Pittsburgh Steelers', 'San Francisco 49ers',
-  'Seattle Seahawks', 'Tampa Bay Buccaneers', 'Tennessee Titans', 'Washington Commanders'
-];
-
-type SortField = 'team' | 'timesPicked' | 'timesLotw' | 'maxedOutCount';
+  'San Francisco 49ers', 'Chicago Bears', 'Cincinnati Bengals', 'Buffalo Bills',
+  'Denver Broncos', 'Cleveland Browns', 'Tampa Bay Buccaneers', 'Arizona Cardinals',
+  'Los Angeles Chargers', 'Kansas City Chiefs', 'Washington Commanders', 'Dallas Cowboys',
+  'Miami Dolphins', 'Philadelphia Eagles', 'Atlanta Falcons', 'New York Giants',
+  'Jacksonville Jaguars', 'New York Jets', 'Detroit Lions', 'Green Bay Packers',
+  'Carolina Panthers', 'New England Patriots', 'Las Vegas Raiders', 'Los Angeles Rams',
+  'Baltimore Ravens', 'New Orleans Saints', 'Seattle Seahawks', 'Pittsburgh Steelers',
+  'Houston Texans', 'Tennessee Titans', 'Minnesota Vikings'
+].sort((a, b) => getTeamNickname(a).localeCompare(getTeamNickname(b)));
 
 export default function StatsTab() {
-  const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('perfection');
-  const [profiles, setProfiles] = useState<any[]>([]);
-  const [allPicks, setAllPicks] = useState<any[]>([]);
-  const [gamesMap, setGamesMap] = useState<Record<string, any>>({});
-
-  const [sortField, setSortField] = useState<SortField>('timesPicked');
-  const [sortAsc, setSortAsc] = useState<boolean>(false);
+  const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('popular');
+  const [teamStats, setTeamRecords] = useState<any[]>([]);
+  const [perfectionData, setPerfectionData] = useState<any[]>([]);
+  const [historyData, setHistoryData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStatsData();
-  }, []);
+    fetchStats();
+  }, [subTab]);
 
-  const fetchStatsData = async () => {
-    const { data: profs } = await supabase.from('profiles').select('*');
-    const { data: picksData } = await supabase.from('picks').select('*, games(*)');
-    const { data: gamesData } = await supabase.from('games').select('*');
+  const fetchStats = async () => {
+    setLoading(true);
 
-    const gMap: Record<string, any> = {};
-    (gamesData || []).forEach((g) => {
-      gMap[g.id] = g;
+    const { data: picks } = await supabase
+      .from('picks')
+      .select('*, games(*), profiles(*)');
+
+    const { data: games } = await supabase
+      .from('games')
+      .select('*');
+
+    // 1. Calculate Popular Team Stats strictly for completed games (status === 'post')
+    const completedPicks = (picks || []).filter((p) => p.games && p.games.status === 'post');
+
+    const teamCounts: Record<string, { picked: number; lotw: number; maxed: number }> = {};
+    ALL_NFL_TEAMS.forEach((t) => {
+      teamCounts[t] = { picked: 0, lotw: 0, maxed: 0 };
     });
 
-    setProfiles(profs || []);
-    setAllPicks(picksData || []);
-    setGamesMap(gMap);
-  };
+    const userTeamUsage: Record<string, Record<string, number>> = {};
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortAsc(!sortAsc);
-    } else {
-      setSortField(field);
-      setSortAsc(false);
-    }
-  };
-
-  // Perfection Calculations
-  const userPerfectWeeks: Record<string, number> = {};
-  const zeroPointWeeks: { user: any; week: number; picks: any[] }[] = [];
-
-  profiles.forEach((p) => {
-    userPerfectWeeks[p.id] = 0;
-
-    for (let w = 1; w <= 18; w++) {
-      const weekPicks = allPicks.filter((pick) => pick.user_id === p.id && pick.week === w);
-      if (weekPicks.length === 6) {
-        const finishedPicks = weekPicks.filter((pick) => pick.games?.status === 'post');
-        if (finishedPicks.length === 6) {
-          const weekPts = finishedPicks.reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
-          if (weekPts === 7) userPerfectWeeks[p.id] += 1;
-          if (weekPts === 0) zeroPointWeeks.push({ user: p, week: w, picks: finishedPicks });
-        }
+    completedPicks.forEach((p) => {
+      const team = p.selected_team;
+      if (teamCounts[team]) {
+        teamCounts[team].picked += 1;
+        if (p.is_lock) teamCounts[team].lotw += 1;
       }
-    }
-  });
 
-  const sortedPerfectionUsers = [...profiles].sort(
-    (a, b) => (userPerfectWeeks[b.id] || 0) - (userPerfectWeeks[a.id] || 0)
-  );
-
-  // Popular Calculations with Team Records
-  const teamPopularStats = ALL_NFL_TEAMS.map((teamFullName) => {
-    const teamPicks = allPicks.filter((p) => p.selected_team === teamFullName);
-    const timesPicked = teamPicks.length;
-    const timesLotw = teamPicks.filter((p) => p.is_lock).length;
-
-    const userCounts: Record<string, number> = {};
-    teamPicks.forEach((p) => {
-      userCounts[p.user_id] = (userCounts[p.user_id] || 0) + 1;
+      if (!userTeamUsage[p.user_id]) userTeamUsage[p.user_id] = {};
+      userTeamUsage[p.user_id][team] = (userTeamUsage[p.user_id][team] || 0) + 1;
     });
-    const maxedOutCount = Object.values(userCounts).filter((cnt) => cnt >= 6).length;
 
-    // Get team record from latest game
-    const teamGames = Object.values(gamesMap).filter(
-      (g) => g.home_team === teamFullName || g.away_team === teamFullName
-    );
-    const latestGame = teamGames[teamGames.length - 1];
-    let record = '0-0';
-    if (latestGame) {
-      record = latestGame.home_team === teamFullName ? (latestGame.home_record || '0-0') : (latestGame.away_record || '0-0');
-    }
+    Object.values(userTeamUsage).forEach((userMap) => {
+      Object.entries(userMap).forEach(([team, count]) => {
+        if (count >= 6 && teamCounts[team]) {
+          teamCounts[team].maxed += 1;
+        }
+      });
+    });
 
-    return {
-      teamFullName,
-      teamNick: getTeamNickname(teamFullName),
-      record,
-      timesPicked,
-      timesLotw,
-      maxedOutCount,
-    };
-  }).sort((a, b) => {
-    let comp = 0;
-    if (sortField === 'team') {
-      comp = a.teamNick.localeCompare(b.teamNick);
-    } else {
-      comp = b[sortField] - a[sortField];
-    }
-    return sortAsc ? -comp : comp;
-  });
+    const teamRecordMap: Record<string, string> = {};
+    (games || []).forEach((g) => {
+      if (g.home_team && g.home_record) teamRecordMap[g.home_team] = g.home_record;
+      if (g.away_team && g.away_record) teamRecordMap[g.away_team] = g.away_record;
+    });
+
+    const popularList = ALL_NFL_TEAMS.map((team) => ({
+      team,
+      nick: getTeamNickname(team),
+      record: teamRecordMap[team] || '0-0',
+      picked: teamCounts[team].picked,
+      lotw: teamCounts[team].lotw,
+      maxed: teamCounts[team].maxed,
+    })).sort((a, b) => b.picked - a.picked || a.nick.localeCompare(b.nick));
+
+    setTeamRecords(popularList);
+
+    // 2. Perfection Stats (Users with 6-0 weeks in completed weeks)
+    const userWeekStats: Record<string, Record<number, { wins: number; total: number; profile: any }>> = {};
+
+    completedPicks.forEach((p) => {
+      const uId = p.user_id;
+      const wk = p.week;
+      if (!userWeekStats[uId]) userWeekStats[uId] = {};
+      if (!userWeekStats[uId][wk]) {
+        userWeekStats[uId][wk] = { wins: 0, total: 0, profile: p.profiles };
+      }
+
+      userWeekStats[uId][wk].total += 1;
+      if (p.games?.winner_team === p.selected_team) {
+        userWeekStats[uId][wk].wins += 1;
+      }
+    });
+
+    const perfectionList: any[] = [];
+    Object.entries(userWeekStats).forEach(([uId, weekMap]) => {
+      Object.entries(weekMap).forEach(([wkStr, stat]) => {
+        const wkNum = Number(wkStr);
+        const req = wkNum === 18 ? 16 : 6;
+        if (stat.total === req && stat.wins === req) {
+          perfectionList.push({
+            user_id: uId,
+            profile: stat.profile,
+            week: wkNum,
+          });
+        }
+      });
+    });
+
+    setPerfectionData(perfectionList.sort((a, b) => a.week - b.week));
+
+    // 3. History Stats (Completed weeks overview)
+    const weekSummaries: Record<number, { completedGames: number; totalPicks: number }> = {};
+    (games || []).forEach((g) => {
+      if (g.status === 'post') {
+        if (!weekSummaries[g.week]) weekSummaries[g.week] = { completedGames: 0, totalPicks: 0 };
+        weekSummaries[g.week].completedGames += 1;
+      }
+    });
+
+    completedPicks.forEach((p) => {
+      if (weekSummaries[p.week]) {
+        weekSummaries[p.week].totalPicks += 1;
+      }
+    });
+
+    const histList = Object.entries(weekSummaries).map(([wk, data]) => ({
+      week: Number(wk),
+      completedGames: data.completedGames,
+      totalPicks: data.totalPicks,
+    })).sort((a, b) => b.week - a.week);
+
+    setHistoryData(histList);
+    setLoading(false);
+  };
 
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
-      {/* Subtabs Header */}
-      <div className="flex gap-2 border-b border-gray-800 pb-2">
+      <div className="flex justify-center gap-2 bg-gray-900 p-1.5 rounded-xl border border-gray-800">
         <button
           onClick={() => setSubTab('perfection')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
             subTab === 'perfection' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -132,7 +155,7 @@ export default function StatsTab() {
         </button>
         <button
           onClick={() => setSubTab('popular')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
             subTab === 'popular' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -140,7 +163,7 @@ export default function StatsTab() {
         </button>
         <button
           onClick={() => setSubTab('history')}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
             subTab === 'history' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -148,154 +171,118 @@ export default function StatsTab() {
         </button>
       </div>
 
-      {/* Subtab 1: Perfection */}
-      {subTab === 'perfection' && (
-        <div className="flex flex-col gap-4">
-          <div className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex flex-col gap-3">
-            <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
-              <span>🌟</span> Perfect 7-Point Weeks
-            </h3>
-            <p className="text-[11px] text-gray-400">
-              7 points is the maximum weekly score (5 regular wins + 2 for Lock of the Week).
-            </p>
+      {loading ? (
+        <div className="py-12 text-center text-xs text-gray-500 font-mono animate-pulse">
+          Loading league statistics...
+        </div>
+      ) : subTab === 'popular' ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
+          <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center">
+            <span className="text-xs font-bold text-gray-400">Team Popularity (Completed Weeks Only)</span>
+            <span className="text-[10px] text-emerald-400 font-mono font-semibold">Active Season</span>
+          </div>
 
-            <div className="flex flex-col gap-2">
-              {sortedPerfectionUsers.map((user) => (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-800 text-[11px] font-bold text-gray-400 bg-gray-900/50">
+                <th className="py-2.5 px-4">Team</th>
+                <th className="py-2.5 px-3 text-center">Picked ↓</th>
+                <th className="py-2.5 px-3 text-center">LOTW</th>
+                <th className="py-2.5 px-4 text-center">Maxed</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-800/60 text-xs">
+              {teamStats.map((item) => (
+                <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
+                  <td className="py-2.5 px-4 font-bold text-white flex items-center gap-2">
+                    <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain" />
+                    <span>{item.nick}</span>
+                    <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+                  </td>
+                  <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-400">
+                    {item.picked}
+                  </td>
+                  <td className="py-2.5 px-3 text-center font-mono font-bold text-amber-400">
+                    {item.lotw}
+                  </td>
+                  <td className="py-2.5 px-4 text-center font-mono font-bold text-indigo-400">
+                    {item.maxed}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : subTab === 'perfection' ? (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
+          <h3 className="font-extrabold text-sm text-amber-400 flex items-center gap-2">
+            <span>🏆</span> Hall of Perfection
+          </h3>
+          <p className="text-xs text-gray-400">
+            Members who achieved an unblemished 6-0 (or 16-0) record in completed weeks this season.
+          </p>
+
+          {perfectionData.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+              No perfect weeks recorded yet. Check back after completed games!
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 mt-1">
+              {perfectionData.map((item, idx) => (
                 <div
-                  key={user.id}
-                  className="bg-gray-800/80 p-2.5 rounded-lg flex justify-between items-center text-xs"
+                  key={idx}
+                  className="bg-amber-950/20 border border-amber-500/40 p-3 rounded-xl flex justify-between items-center"
                 >
-                  <span className="font-bold text-white">{user.team_name}</span>
-                  <span className="font-mono font-bold text-emerald-400">
-                    {userPerfectWeeks[user.id] || 0} perfect
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-400/50 flex items-center justify-center font-bold text-xs text-amber-300">
+                      {item.profile?.avatar_url ? (
+                        <img src={item.profile.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                      ) : (
+                        `${item.profile?.first_name?.slice(0, 1) || ''}${item.profile?.last_name?.slice(0, 1) || ''}`
+                      )}
+                    </div>
+                    <div>
+                      <span className="font-bold text-xs text-white block">{item.profile?.team_name}</span>
+                      <span className="text-[10px] text-gray-400">
+                        {item.profile?.first_name} {item.profile?.last_name}
+                      </span>
+                    </div>
+                  </div>
+
+                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                    Week {item.week} Perfect
                   </span>
                 </div>
               ))}
             </div>
-          </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
+          <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
+            <span>📜</span> Completed Weeks Overview
+          </h3>
 
-          <div className="bg-red-950/30 border border-red-500/50 p-4 rounded-xl flex flex-col gap-3">
-            <h3 className="text-sm font-bold text-red-400 flex items-center gap-1.5">
-              <span>🚨</span> Oops, all losses!
-            </h3>
-
-            {zeroPointWeeks.length === 0 ? (
-              <p className="text-xs text-gray-400">No users have finished a week with 0 points yet.</p>
-            ) : (
-              zeroPointWeeks.map((item, idx) => (
-                <div key={idx} className="bg-gray-900 border border-gray-800 p-3 rounded-lg flex flex-col gap-2">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-white">
-                      {item.user.team_name} (Week {item.week})
-                    </span>
-                    <span className="text-red-400 font-mono font-bold">0 pts</span>
-                  </div>
-
-                  <div className="grid grid-cols-6 gap-1">
-                    {item.picks.map((p) => (
-                      <div
-                        key={p.id}
-                        className="bg-red-950/80 border border-red-500/60 rounded p-1 flex flex-col items-center gap-0.5 text-center"
-                      >
-                        <img src={getTeamLogoUrl(p.selected_team)} alt="" className="w-5 h-5 object-contain" />
-                        <span className="text-[9px] text-red-400 font-mono font-bold">L</span>
-                      </div>
-                    ))}
+          {historyData.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-500 font-mono">
+              No completed weeks available yet.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {historyData.map((item) => (
+                <div
+                  key={item.week}
+                  className="bg-gray-800/80 border border-gray-700/80 p-3 rounded-xl flex justify-between items-center text-xs"
+                >
+                  <span className="font-bold text-white">Week {item.week}</span>
+                  <div className="flex gap-4 font-mono text-gray-300">
+                    <span>{item.completedGames} Games Final</span>
+                    <span className="text-emerald-400 font-bold">{item.totalPicks} Picks</span>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Subtab 2: Popular */}
-      {subTab === 'popular' && (
-        <div className="flex flex-col gap-2">
-          <div className="bg-gray-900 border border-gray-800 p-3 rounded-xl text-xs flex justify-between items-center font-bold text-gray-400 select-none">
-            <button
-              onClick={() => handleSort('team')}
-              className="hover:text-white transition-colors inline-flex items-center gap-1 whitespace-nowrap"
-            >
-              Team {sortField === 'team' && (sortAsc ? '↑' : '↓')}
-            </button>
-
-            <div className="flex gap-2 font-mono text-[10px]">
-              <button
-                onClick={() => handleSort('timesPicked')}
-                className="min-w-[54px] text-right hover:text-white transition-colors whitespace-nowrap inline-flex items-center justify-end gap-0.5"
-              >
-                Picked {sortField === 'timesPicked' && (sortAsc ? '↑' : '↓')}
-              </button>
-              <button
-                onClick={() => handleSort('timesLotw')}
-                className="min-w-[54px] text-right hover:text-white transition-colors whitespace-nowrap inline-flex items-center justify-end gap-0.5"
-              >
-                LOTW {sortField === 'timesLotw' && (sortAsc ? '↑' : '↓')}
-              </button>
-              <button
-                onClick={() => handleSort('maxedOutCount')}
-                className="min-w-[54px] text-right hover:text-white transition-colors whitespace-nowrap inline-flex items-center justify-end gap-0.5"
-              >
-                Maxed {sortField === 'maxedOutCount' && (sortAsc ? '↑' : '↓')}
-              </button>
+              ))}
             </div>
-          </div>
-
-          {teamPopularStats.map((item) => (
-            <div
-              key={item.teamFullName}
-              className="bg-gray-900 border border-gray-800 p-2.5 rounded-xl flex justify-between items-center text-xs"
-            >
-              <div className="flex items-center gap-2 min-w-0 pr-2">
-                <img src={getTeamLogoUrl(item.teamFullName)} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
-                <span className="font-bold text-white truncate">
-                  {item.teamNick} <span className="text-gray-400 font-normal font-mono text-[11px]">({item.record})</span>
-                </span>
-              </div>
-
-              <div className="flex gap-2 font-mono font-bold text-right text-xs flex-shrink-0">
-                <span className="min-w-[54px] text-emerald-400">{item.timesPicked}</span>
-                <span className="min-w-[54px] text-amber-400">{item.timesLotw}</span>
-                <span className="min-w-[54px] text-indigo-400">{item.maxedOutCount}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Subtab 3: History */}
-      {subTab === 'history' && (
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-gray-400">Celebrate our league&apos;s past champions.</p>
-
-          <div className="bg-gradient-to-r from-amber-950/60 to-yellow-950/60 border-2 border-amber-400 rounded-2xl p-4 shadow-xl flex justify-between items-center">
-            <div>
-              <span className="text-xs font-mono font-extrabold text-amber-400">2025 CHAMPION</span>
-              <h4 className="text-lg font-extrabold text-white flex items-center gap-1.5">
-                Mandie 🏆
-              </h4>
-            </div>
-            <span className="font-mono font-bold text-amber-300 text-sm bg-black/40 px-3 py-1 rounded-lg border border-amber-400/40">
-              80-21
-            </span>
-          </div>
-
-          <div className="bg-gradient-to-r from-amber-950/60 to-yellow-950/60 border-2 border-amber-400 rounded-2xl p-4 shadow-xl flex flex-col gap-2">
-            <span className="text-xs font-mono font-extrabold text-amber-400">2024 CO-CHAMPIONS</span>
-            <div className="flex justify-between items-center border-b border-amber-500/20 pb-1.5">
-              <h4 className="text-sm font-bold text-white flex items-center gap-1">
-                Rick 🏆
-              </h4>
-              <span className="font-mono font-bold text-amber-300 text-xs">73-17</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <h4 className="text-sm font-bold text-white flex items-center gap-1">
-                Lindsay 🏆
-              </h4>
-              <span className="font-mono font-bold text-amber-300 text-xs">73-17</span>
-            </div>
-          </div>
+          )}
         </div>
       )}
     </div>
