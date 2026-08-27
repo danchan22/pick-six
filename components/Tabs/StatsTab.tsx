@@ -341,7 +341,7 @@ export default function StatsTab() {
           {/* Hall of Shame / Goose Egg (0 Point Weeks) */}
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 flex flex-col gap-3 shadow-xl">
             <h3 className="font-extrabold text-sm text-red-400 flex items-center gap-2">
-              <span>🦆</span> Zero Point Weeks (Goose Egg)
+              <span>💩</span> Hall of Poop
             </h3>
             <p className="text-xs text-gray-400">
               Members who scored 0 or fewer points in a completed week.
