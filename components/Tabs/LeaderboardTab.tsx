@@ -82,6 +82,7 @@ export default function LeaderboardTab() {
         {standings.map((user, index) => {
           const isCurrentUser = user.id === currentUserId;
           const initials = `${user.first_name?.slice(0, 1) || ''}${user.last_name?.slice(0, 1) || ''}`.toUpperCase() || 'PS';
+          const champYear = user.championships ? String(user.championships).trim() : '';
 
           return (
             <div
@@ -118,6 +119,13 @@ export default function LeaderboardTab() {
                   <p className="text-[11px] text-gray-400">
                     {user.first_name} {user.last_name}
                   </p>
+
+                  {/* Gold Champion Line */}
+                  {champYear && (
+                    <span className="text-[10px] font-semibold text-amber-400 flex items-center gap-1 mt-0.5">
+                      <span>🏆</span> {champYear} Champion
+                    </span>
+                  )}
                 </div>
               </div>
 
