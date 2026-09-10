@@ -36,17 +36,35 @@ export async function GET(request: Request) {
       const competition = event.competitions[0];
       const home = competition.competitors.find((c: any) => c.homeAway === 'home');
       const away = competition.competitors.find((c: any) => c.homeAway === 'away');
-      const statusState = event.status.type.state;
-      const statusName = event.status.type.name;
+      const statusState = event.status?.type?.state;
+      const statusName = event.status?.type?.name;
+      const isCompleted =
+        event.status?.type?.completed ||
+        statusState === 'post' ||
+        statusName === 'STATUS_FINAL';
 
       let gameStatus = statusState;
+      if (isCompleted) gameStatus = 'post';
       if (statusName === 'STATUS_POSTPONED') gameStatus = 'postponed';
       if (statusName === 'STATUS_CANCELED') gameStatus = 'canceled';
 
+      // Extract records if available
+      const homeRecordObj = home.records?.find(
+        (r: any) => r.type === 'total' || r.name === 'overall'
+      );
+      const awayRecordObj = away.records?.find(
+        (r: any) => r.type === 'total' || r.name === 'overall'
+      );
+      const homeRecordStr = homeRecordObj?.summary || home.record || '0-0';
+      const awayRecordStr = awayRecordObj?.summary || away.record || '0-0';
+
+      const homeScoreNum = parseInt(home.score ?? '0', 10);
+      const awayScoreNum = parseInt(away.score ?? '0', 10);
+
       let winnerTeam = null;
       if (gameStatus === 'post') {
-        if (parseInt(home.score) > parseInt(away.score)) winnerTeam = home.team.displayName;
-        else if (parseInt(away.score) > parseInt(home.score)) winnerTeam = away.team.displayName;
+        if (homeScoreNum > awayScoreNum) winnerTeam = home.team.displayName;
+        else if (awayScoreNum > homeScoreNum) winnerTeam = away.team.displayName;
         else winnerTeam = 'TIE';
       }
 
@@ -56,8 +74,10 @@ export async function GET(request: Request) {
         week: weekNumber,
         home_team: home.team.displayName,
         away_team: away.team.displayName,
-        home_score: parseInt(home.score || 0),
-        away_score: parseInt(away.score || 0),
+        home_record: homeRecordStr,
+        away_record: awayRecordStr,
+        home_score: homeScoreNum,
+        away_score: awayScoreNum,
         kickoff_time: event.date,
         status: gameStatus,
         winner_team: winnerTeam,
