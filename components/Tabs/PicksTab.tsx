@@ -23,6 +23,11 @@ interface Pick {
   is_lock: boolean;
   points_awarded?: number;
   games?: Game;
+  profiles?: {
+    team_name?: string;
+    first_name?: string;
+    last_name?: string;
+  };
 }
 
 interface PicksTabProps {
@@ -35,6 +40,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   const [selectedWeek, setSelectedWeek] = useState(currentWeek || 1);
   const [games, setGames] = useState<Game[]>([]);
   const [picks, setPicks] = useState<Pick[]>([]);
+  const [allWeekPicks, setAllWeekPicks] = useState<Pick[]>([]);
   const [teamPickCounts, setTeamPickCounts] = useState<Record<string, number>>({});
   const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<number | null>(null);
 
@@ -45,6 +51,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   useEffect(() => {
     fetchWeekGames();
     fetchUserPicks();
+    fetchAllWeekPicks();
     fetchSeasonTeamCounts();
   }, [selectedWeek, userId]);
 
@@ -74,6 +81,14 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     }
   };
 
+  const fetchAllWeekPicks = async () => {
+    const { data } = await supabase
+      .from('picks')
+      .select('*, profiles(team_name, first_name, last_name)')
+      .eq('week', selectedWeek);
+    setAllWeekPicks(data || []);
+  };
+
   const fetchSeasonTeamCounts = async () => {
     const { data } = await supabase
       .from('picks')
@@ -91,6 +106,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     const { error } = await supabase.from('picks').delete().eq('id', pickId);
     if (error) return;
     await fetchUserPicks();
+    await fetchAllWeekPicks();
     await fetchSeasonTeamCounts();
   };
 
@@ -106,6 +122,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         .update({ selected_team: team })
         .eq('id', existingPick.id);
       fetchUserPicks();
+      fetchAllWeekPicks();
     } else {
       if (!isChaosWeek && picks.length >= 6) return;
 
@@ -120,6 +137,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         is_lock: shouldBeLock,
       });
       fetchUserPicks();
+      fetchAllWeekPicks();
     }
     fetchSeasonTeamCounts();
   };
@@ -184,6 +202,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
 
         setSelectedSlotForSwap(null);
         await fetchUserPicks();
+        await fetchAllWeekPicks();
       }
     }
   };
@@ -270,7 +289,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
             >
               <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
                 <span>{formattedKickoff}</span>
-                {locked && <span className="text-red-400 font-bold">🔒</span>}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -282,6 +300,10 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                   const isLock = isSelected && currentPick?.is_lock;
                   const count = teamPickCounts[team.full] || 0;
                   const disabled = locked || (!isChaosWeek && count >= 6 && !isSelected);
+
+                  const teamPicks = allWeekPicks.filter(
+                    (p) => p.game_id === game.id && p.selected_team === team.full
+                  );
 
                   let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
                   if (isSelected) {
@@ -301,28 +323,54 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                       key={team.full}
                       disabled={disabled}
                       onClick={() => handleSelectTeam(game.id, team.full)}
-                      className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 transition-all ${btnColor} ${
-                        disabled ? 'opacity-40 cursor-not-allowed' : ''
+                      className={`p-2.5 rounded-lg border flex flex-col justify-between transition-all ${btnColor} ${
+                        disabled && !locked ? 'opacity-40 cursor-not-allowed' : locked ? 'cursor-default' : ''
                       }`}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <img
-                          src={getTeamLogoUrl(team.full)}
-                          alt={team.nick}
-                          className="w-6 h-6 object-contain flex-shrink-0"
-                        />
-                        <div className="flex flex-col items-start truncate">
-                          <span className="text-xs font-semibold truncate">{team.nick}</span>
-                          {!isChaosWeek && (
-                            <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
-                              Picked {count}/6
+                      <div className="flex items-center justify-between gap-2 w-full">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <img
+                            src={getTeamLogoUrl(team.full)}
+                            alt={team.nick}
+                            className="w-6 h-6 object-contain flex-shrink-0"
+                          />
+                          <div className="flex flex-col items-start truncate">
+                            <span className="text-xs font-semibold truncate">{team.nick}</span>
+                            {!isChaosWeek && (
+                              <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
+                                Picked {count}/6
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`text-[10px] font-mono font-medium flex-shrink-0 ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
+                          {team.record || '0-0'}
+                        </span>
+                      </div>
+
+                      {/* Locked game pickers list */}
+                      {locked && (
+                        <div className="w-full mt-2">
+                          <div className="border-t border-dashed border-gray-700/80 mb-2 w-full" />
+                          {teamPicks.length === 0 ? (
+                            <span className="text-[10px] text-gray-500 italic truncate w-full text-left block">
+                              nobody picked this team
                             </span>
+                          ) : (
+                            <div className="flex flex-col gap-0.5 w-full text-left">
+                              {teamPicks.map((p) => {
+                                const displayName = p.profiles?.team_name || `${p.profiles?.first_name || ''} ${p.profiles?.last_name || ''}`.trim() || 'Unknown';
+                                return (
+                                  <div key={p.id} className="flex items-center justify-between text-[10px] text-gray-300 min-w-0">
+                                    <span className="truncate">{displayName}</span>
+                                    {p.is_lock && <span className="text-[9px] flex-shrink-0 ml-1">🔒</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           )}
                         </div>
-                      </div>
-                      <span className={`text-[10px] font-mono font-medium flex-shrink-0 ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
-                        {team.record || '0-0'}
-                      </span>
+                      )}
                     </button>
                   );
                 })}
@@ -338,7 +386,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           <div className="max-w-md mx-auto flex flex-col gap-1.5">
             {/* Week 1 Lock Helper Banner */}
             {selectedWeek === 1 && (
-              <div className="bg-gray-900/90 border border-amber-500/50 text-amber-300 text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-xl flex items-center justify-center gap-1.5 text-left shadow-lg">
+              <div className="bg-gray-900/90 border border-amber-500/50 text-amber-300 text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-xl flex items-center justify-center gap-1.5 text-center shadow-lg">
                 <span>💡</span>
                 <span>Tap a team below, then tap on the far right lock slot to make that team your Lock of the Week.</span>
               </div>
