@@ -317,7 +317,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
 
                   const isWinner = isFinished && game.winner_team === team.full;
                   const isTie = isFinished && game.winner_team === 'TIE';
-                  const isLoser = isFinished && !isWinner && !isTie;
 
                   let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
                   if (isSelected) {
@@ -329,6 +328,18 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                       btnColor = 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-lg ring-1 ring-amber-400/50';
                     } else {
                       btnColor = 'bg-blue-600/30 border-blue-500 text-white font-bold';
+                    }
+                  }
+
+                  // Styled Score Box Colors
+                  let scoreBoxStyle = 'bg-gray-800 border-gray-700 text-gray-300';
+                  if (isFinished) {
+                    if (isWinner) {
+                      scoreBoxStyle = 'bg-emerald-950/60 border-emerald-500/60 text-emerald-400 font-extrabold';
+                    } else if (isTie) {
+                      scoreBoxStyle = 'bg-amber-950/60 border-amber-500/60 text-amber-400 font-extrabold';
+                    } else {
+                      scoreBoxStyle = 'bg-red-950/60 border-red-500/60 text-red-400 font-bold';
                     }
                   }
 
@@ -349,23 +360,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                             className="w-6 h-6 object-contain flex-shrink-0"
                           />
                           <div className="flex flex-col items-start truncate">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="text-xs font-semibold truncate">{team.nick}</span>
-                              {/* Green W / Red L / Amber T Badge */}
-                              {isFinished && (
-                                <span
-                                  className={`text-[9px] font-black px-1 py-0.2 rounded border flex-shrink-0 ${
-                                    isWinner
-                                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                                      : isTie
-                                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
-                                      : 'bg-red-500/20 text-red-400 border-red-500/50'
-                                  }`}
-                                >
-                                  {isWinner ? 'W' : isTie ? 'T' : 'L'}
-                                </span>
-                              )}
-                            </div>
+                            <span className="text-xs font-semibold truncate">{team.nick}</span>
                             {!isChaosWeek && (
                               <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
                                 Picked {count}/6
@@ -375,14 +370,15 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                         </div>
 
                         <div className="flex flex-col items-end flex-shrink-0">
-                          {isFinished && team.score !== undefined && team.score !== null && (
-                            <span className={`text-xs font-mono font-black ${isWinner ? 'text-emerald-400' : 'text-gray-300'}`}>
+                          {isFinished && team.score !== undefined && team.score !== null ? (
+                            <div className={`px-2 py-0.5 rounded border text-xs font-mono ${scoreBoxStyle}`}>
                               {team.score}
+                            </div>
+                          ) : (
+                            <span className={`text-[10px] font-mono font-medium ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
+                              {team.record || '0-0'}
                             </span>
                           )}
-                          <span className={`text-[10px] font-mono font-medium ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
-                            {team.record || '0-0'}
-                          </span>
                         </div>
                       </div>
 
