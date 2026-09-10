@@ -6,6 +6,7 @@ export async function GET(request: Request) {
     // 1. Verify Secret Key (for cron security)
     const { searchParams } = new URL(request.url);
     const secret = searchParams.get('secret');
+    const targetWeek = searchParams.get('week');
     const authHeader = request.headers.get('authorization');
 
     if (
@@ -16,19 +17,24 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 2. Fetch current NFL scoreboard from ESPN Public API
-    const espnRes = await fetch(
-      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
-      { cache: 'no-store' }
-    );
+    // 2. Fetch regular season (seasontype=2) scoreboard from ESPN
+    let espnUrl =
+      'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2';
+    if (targetWeek) {
+      espnUrl += `&week=${targetWeek}`;
+    }
+
+    const espnRes = await fetch(espnUrl, { cache: 'no-store' });
     const espnData = await espnRes.json();
 
-    const weekNumber = espnData.week?.number;
-    const seasonYear = espnData.season?.year;
+    const weekNumber = targetWeek
+      ? parseInt(targetWeek, 10)
+      : espnData.week?.number || 1;
+    const seasonYear = espnData.season?.year || 2026;
     const events = espnData.events || [];
 
     if (!events.length) {
-      return NextResponse.json({ message: 'No events found' });
+      return NextResponse.json({ message: 'No events found for this week' });
     }
 
     // 3. Map ESPN events to Supabase games structure
@@ -48,7 +54,7 @@ export async function GET(request: Request) {
       if (statusName === 'STATUS_POSTPONED') gameStatus = 'postponed';
       if (statusName === 'STATUS_CANCELED') gameStatus = 'canceled';
 
-      // Extract records if available
+      // Extract records
       const homeRecordObj = home.records?.find(
         (r: any) => r.type === 'total' || r.name === 'overall'
       );
@@ -97,6 +103,8 @@ export async function GET(request: Request) {
       .filter((g: any) => g.status === 'post' || g.status === 'canceled')
       .map((g: any) => g.id);
 
+    let scoredPicksCount = 0;
+
     if (completedGameIds.length > 0) {
       const { data: picksToScore } = await supabaseAdmin
         .from('picks')
@@ -104,6 +112,7 @@ export async function GET(request: Request) {
         .in('game_id', completedGameIds);
 
       if (picksToScore && picksToScore.length > 0) {
+        scoredPicksCount = picksToScore.length;
         for (const pick of picksToScore) {
           const game = pick.games;
           let points = 0.0;
@@ -114,10 +123,8 @@ export async function GET(request: Request) {
             const isWin = pick.selected_team === game.winner_team;
 
             if (pick.is_lock) {
-              // Lock of the Week: Win (+2), Tie (-1), Loss (-1)
               points = isWin ? 2.0 : -1.0;
             } else {
-              // Standard Pick: Win (+1), Tie (+0.5), Loss (0)
               if (isWin) points = 1.0;
               else if (game.winner_team === 'TIE') points = 0.5;
               else points = 0.0;
@@ -134,8 +141,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      syncedGames: gamesToUpsert.length,
       week: weekNumber,
+      syncedGames: gamesToUpsert.length,
+      scoredPicks: scoredPicksCount,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
