@@ -291,7 +291,8 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                 <span>{formattedKickoff}</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              {/* Align items to top */}
+              <div className="grid grid-cols-2 gap-2 items-start">
                 {[
                   { full: game.away_team, nick: awayNickname, record: game.away_record },
                   { full: game.home_team, nick: homeNickname, record: game.home_record },
@@ -323,7 +324,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                       key={team.full}
                       disabled={disabled}
                       onClick={() => handleSelectTeam(game.id, team.full)}
-                      className={`p-2.5 rounded-lg border flex flex-col justify-between transition-all ${btnColor} ${
+                      className={`p-2.5 rounded-lg border flex flex-col justify-start transition-all ${btnColor} ${
                         disabled && !locked ? 'opacity-40 cursor-not-allowed' : locked ? 'cursor-default' : ''
                       }`}
                     >
@@ -359,7 +360,13 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                           ) : (
                             <div className="flex flex-col gap-0.5 w-full text-left">
                               {teamPicks.map((p) => {
-                                const displayName = p.profiles?.team_name || `${p.profiles?.first_name || ''} ${p.profiles?.last_name || ''}`.trim() || 'Unknown';
+                                const firstName = p.profiles?.first_name?.trim();
+                                const lastInitial = p.profiles?.last_name?.trim()?.slice(0, 1);
+                                
+                                const displayName = firstName
+                                  ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}`
+                                  : p.profiles?.team_name || 'Unknown';
+
                                 return (
                                   <div key={p.id} className="flex items-center justify-between text-[10px] text-gray-300 min-w-0">
                                     <span className="truncate">{displayName}</span>
