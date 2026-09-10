@@ -11,6 +11,8 @@ interface Game {
   away_team: string;
   home_record?: string;
   away_record?: string;
+  home_score?: number;
+  away_score?: number;
   kickoff_time: string;
   status: string;
   winner_team: string | null;
@@ -282,6 +284,8 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           const timeStr = kickoffDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
           const formattedKickoff = `${dayName} ${month}/${day} • ${timeStr}`;
 
+          const isFinished = game.status === 'post';
+
           return (
             <div
               key={game.id}
@@ -289,13 +293,18 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
             >
               <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
                 <span>{formattedKickoff}</span>
+                {isFinished && (
+                  <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                    FINAL
+                  </span>
+                )}
               </div>
 
               {/* Align items to top */}
               <div className="grid grid-cols-2 gap-2 items-start">
                 {[
-                  { full: game.away_team, nick: awayNickname, record: game.away_record },
-                  { full: game.home_team, nick: homeNickname, record: game.home_record },
+                  { full: game.away_team, nick: awayNickname, record: game.away_record, score: game.away_score },
+                  { full: game.home_team, nick: homeNickname, record: game.home_record, score: game.home_score },
                 ].map((team) => {
                   const isSelected = currentPick?.selected_team === team.full;
                   const isLock = isSelected && currentPick?.is_lock;
@@ -306,11 +315,15 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                     (p) => p.game_id === game.id && p.selected_team === team.full
                   );
 
+                  const isWinner = isFinished && game.winner_team === team.full;
+                  const isTie = isFinished && game.winner_team === 'TIE';
+                  const isLoser = isFinished && !isWinner && !isTie;
+
                   let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
                   if (isSelected) {
-                    if (game.status === 'post') {
-                      if (team.full === game.winner_team) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
-                      else if (game.winner_team === 'TIE') btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
+                    if (isFinished) {
+                      if (isWinner) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
+                      else if (isTie) btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
                       else btnColor = 'bg-red-600/30 border-red-500 text-white font-bold';
                     } else if (isLock) {
                       btnColor = 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-lg ring-1 ring-amber-400/50';
@@ -336,7 +349,23 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                             className="w-6 h-6 object-contain flex-shrink-0"
                           />
                           <div className="flex flex-col items-start truncate">
-                            <span className="text-xs font-semibold truncate">{team.nick}</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs font-semibold truncate">{team.nick}</span>
+                              {/* Green W / Red L / Amber T Badge */}
+                              {isFinished && (
+                                <span
+                                  className={`text-[9px] font-black px-1 py-0.2 rounded border flex-shrink-0 ${
+                                    isWinner
+                                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
+                                      : isTie
+                                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/50'
+                                      : 'bg-red-500/20 text-red-400 border-red-500/50'
+                                  }`}
+                                >
+                                  {isWinner ? 'W' : isTie ? 'T' : 'L'}
+                                </span>
+                              )}
+                            </div>
                             {!isChaosWeek && (
                               <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
                                 Picked {count}/6
@@ -344,9 +373,17 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                             )}
                           </div>
                         </div>
-                        <span className={`text-[10px] font-mono font-medium flex-shrink-0 ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
-                          {team.record || '0-0'}
-                        </span>
+
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          {isFinished && team.score !== undefined && team.score !== null && (
+                            <span className={`text-xs font-mono font-black ${isWinner ? 'text-emerald-400' : 'text-gray-300'}`}>
+                              {team.score}
+                            </span>
+                          )}
+                          <span className={`text-[10px] font-mono font-medium ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
+                            {team.record || '0-0'}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Locked game pickers list */}
@@ -362,7 +399,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                               {teamPicks.map((p) => {
                                 const firstName = p.profiles?.first_name?.trim();
                                 const lastInitial = p.profiles?.last_name?.trim()?.slice(0, 1);
-                                
+
                                 const displayName = firstName
                                   ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}`
                                   : p.profiles?.team_name || 'Unknown';
