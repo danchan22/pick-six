@@ -58,27 +58,28 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     fetchSeasonTeamCounts();
   }, [selectedWeek, userId]);
 
-useEffect(() => {
-  const channel = supabase
-    .channel('realtime-games')
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'games' },
-      (payload) => {
-        setGames((prevGames) =>
-          prevGames.map((game) =>
-            game.id === payload.new.id ? { ...game, ...payload.new } : game
-          )
-        );
-      }
-    )
-    .subscribe();
+  // Subscribe to Supabase Realtime updates on the 'games' table
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-games')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'games' },
+        (payload) => {
+          setGames((prevGames) =>
+            prevGames.map((game) =>
+              game.id === payload.new.id ? { ...game, ...payload.new } : game
+            )
+          );
+        }
+      )
+      .subscribe();
 
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
-  
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const fetchWeekGames = async () => {
     const { data } = await supabase
       .from('games')
@@ -321,9 +322,14 @@ useEffect(() => {
                     FINAL
                   </span>
                 ) : isLive ? (
-                  <span className="text-[10px] font-mono font-bold text-red-500 uppercase tracking-wider animate-pulse flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-                    LIVE {game.game_detail ? `• ${game.game_detail}` : ''}
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                    <span className="text-white">
+                      {game.game_detail || 'LIVE'}
+                    </span>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-red-500 animate-pulse">
+                      LIVE
+                    </span>
                   </span>
                 ) : null}
               </div>
