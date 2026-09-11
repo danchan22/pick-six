@@ -189,21 +189,35 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   const handleSlotClick = async (index: number) => {
     if (isChaosWeek) return;
     const currentSlotPick = pickSlots[index];
+    
+    // Check if the pick associated with this slot belongs to a game that has started
+    if (currentSlotPick) {
+      const slotGame = games.find((g) => g.id === currentSlotPick.game_id) || currentSlotPick.games;
+      if (slotGame && isGameLocked(slotGame.kickoff_time)) {
+        return; // Prevent swapping or deleting locked games
+      }
+    }
 
     if (selectedSlotForSwap === null) {
       if (currentSlotPick) {
         setSelectedSlotForSwap(index);
       }
     } else {
+      const firstPick = pickSlots[selectedSlotForSwap];
+      const secondPick = currentSlotPick;
+
+      // Prevent swap if the target slot contains a locked game
+      if (firstPick) {
+        const firstGame = games.find((g) => g.id === firstPick.game_id) || firstPick.games;
+        if (firstGame && isGameLocked(firstGame.kickoff_time)) return;
+      }
+
       if (selectedSlotForSwap === index) {
         if (currentSlotPick) {
           await deletePick(currentSlotPick.id);
         }
         setSelectedSlotForSwap(null);
       } else {
-        const firstPick = pickSlots[selectedSlotForSwap];
-        const secondPick = pickSlots[index];
-
         if (index === 5 || selectedSlotForSwap === 5) {
           await supabase
             .from('picks')
@@ -489,19 +503,31 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                 let outcomeColor = 'text-gray-500';
                 let slotBg = 'bg-white';
 
-                if (game?.status === 'post' && pick) {
-                  if (pick.selected_team === game.winner_team) {
-                    outcomeLabel = 'W';
-                    outcomeColor = 'text-emerald-400';
-                    slotBg = 'bg-emerald-100';
-                  } else if (game.winner_team === 'TIE') {
-                    outcomeLabel = 'T';
-                    outcomeColor = 'text-amber-400';
-                    slotBg = 'bg-amber-100';
+                const slotLocked = game ? isGameLocked(game.kickoff_time) : false;
+                const isLiveGame = game?.status === 'in';
+                const isFinishedGame = game?.status === 'post';
+
+                if (pick) {
+                  if (isLiveGame) {
+                    outcomeLabel = 'LIVE';
+                    outcomeColor = 'text-red-500 animate-pulse font-black';
+                  } else if (isFinishedGame) {
+                    if (pick.selected_team === game.winner_team) {
+                      outcomeLabel = 'W';
+                      outcomeColor = 'text-emerald-400 font-black';
+                      slotBg = 'bg-emerald-100';
+                    } else if (game.winner_team === 'TIE') {
+                      outcomeLabel = 'T';
+                      outcomeColor = 'text-amber-400 font-black';
+                      slotBg = 'bg-amber-100';
+                    } else {
+                      outcomeLabel = 'L';
+                      outcomeColor = 'text-red-400 font-black';
+                      slotBg = 'bg-red-100';
+                    }
                   } else {
-                    outcomeLabel = 'L';
-                    outcomeColor = 'text-red-400';
-                    slotBg = 'bg-red-100';
+                    outcomeLabel = '?';
+                    outcomeColor = 'text-gray-500 font-bold';
                   }
                 }
 
@@ -510,13 +536,16 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
 
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center gap-0.5 min-w-0">
-                    <span className={`text-[10px] font-black ${outcomeColor}`}>
+                    <span className={`text-[9px] tracking-tight truncate ${outcomeColor}`}>
                       {outcomeLabel}
                     </span>
 
                     <button
+                      disabled={slotLocked}
                       onClick={() => handleSlotClick(i)}
-                      className={`w-full aspect-square max-w-[50px] rounded-xl border flex items-center justify-center p-0.5 relative shadow-md transition-transform active:scale-95 ${slotBg} ${
+                      className={`w-full aspect-square max-w-[50px] rounded-xl border flex items-center justify-center p-0.5 relative shadow-md transition-transform ${slotBg} ${
+                        slotLocked ? 'cursor-default opacity-85' : 'active:scale-95'
+                      } ${
                         isSelectedForSwap
                           ? 'border-2 border-emerald-400 ring-4 ring-emerald-500/50 scale-105'
                           : isSlotLock
