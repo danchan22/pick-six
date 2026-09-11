@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     } else {
       // Fast live scoreboard sync (Only fetches active week in ~300ms)
       const res = await fetch(
-        `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard`,
+        `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2`,
         { cache: 'no-store' }
       );
 
@@ -61,11 +61,17 @@ async function upsertGames(events: any[], weekNum: number, seasonYear: number) {
     const awayRecordObj = away.records?.find((r: any) => r.type === 'total') || away.records?.[0];
 
     const statusState = event.status?.type?.state || 'pre';
+    const statusName = event.status?.type?.name;
+    const isCompleted = event.status?.type?.completed || statusState === 'post' || statusName === 'STATUS_FINAL';
+
+    let gameStatus = statusState;
+    if (isCompleted) gameStatus = 'post';
+
     let winnerTeam = null;
 
-    if (statusState === 'post') {
-      const homeScore = parseInt(home.score || 0);
-      const awayScore = parseInt(away.score || 0);
+    if (gameStatus === 'post') {
+      const homeScore = parseInt(home.score || 0, 10);
+      const awayScore = parseInt(away.score || 0, 10);
       if (homeScore > awayScore) winnerTeam = home.team.displayName;
       else if (awayScore > homeScore) winnerTeam = away.team.displayName;
       else winnerTeam = 'TIE';
@@ -79,10 +85,10 @@ async function upsertGames(events: any[], weekNum: number, seasonYear: number) {
       away_team: away.team.displayName,
       home_record: homeRecordObj?.summary || '0-0',
       away_record: awayRecordObj?.summary || '0-0',
-      home_score: parseInt(home.score || 0),
-      away_score: parseInt(away.score || 0),
+      home_score: parseInt(home.score || 0, 10),
+      away_score: parseInt(away.score || 0, 10),
       kickoff_time: event.date,
-      status: statusState,
+      status: gameStatus,
       winner_team: winnerTeam,
       updated_at: new Date().toISOString(),
     };
