@@ -15,7 +15,7 @@ import PickHistoryModal from '@/components/Modals/PickHistoryModal';
 import TeamsAvailableModal from '@/components/Modals/TeamsAvailableModal';
 import HelpModal from '@/components/Modals/HelpModal';
 import WeeklyRecapModal from '@/components/Modals/WeeklyRecapModal';
-import AnnouncementModal from '@/components/AnnouncementModal';
+import AnnouncementModal from '@/components/Modals/AnnouncementModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'stats' | 'rules' | 'admin'>('picks');
