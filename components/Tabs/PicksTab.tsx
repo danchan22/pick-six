@@ -15,6 +15,7 @@ interface Game {
   away_score?: number;
   kickoff_time: string;
   status: string;
+  game_detail?: string;
   winner_team: string | null;
 }
 
@@ -300,7 +301,8 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                   </span>
                 ) : isLive ? (
                   <span className="text-[10px] font-mono font-bold text-red-500 uppercase tracking-wider animate-pulse flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> LIVE
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                    LIVE {game.game_detail ? `• ${game.game_detail}` : ''}
                   </span>
                 ) : null}
               </div>
