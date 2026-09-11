@@ -7,6 +7,9 @@ interface Announcement {
   id: string;
   title: string;
   content: string;
+  image_url?: string;
+  link_url?: string;
+  link_text?: string;
   is_active: boolean;
 }
 
@@ -25,7 +28,6 @@ export default function AnnouncementModal({ userId }: AnnouncementModalProps) {
   }, [userId]);
 
   const checkActiveAnnouncement = async () => {
-    // Fetch the latest active announcement
     const { data, error } = await supabase
       .from('announcements')
       .select('*')
@@ -36,7 +38,6 @@ export default function AnnouncementModal({ userId }: AnnouncementModalProps) {
 
     if (error || !data) return;
 
-    // Check if user has already dismissed this specific announcement
     const dismissedKey = `announcement_dismissed_${data.id}`;
     const isDismissed = localStorage.getItem(dismissedKey);
 
@@ -48,7 +49,6 @@ export default function AnnouncementModal({ userId }: AnnouncementModalProps) {
 
   const handleDismiss = () => {
     if (announcement) {
-      // Mark this specific announcement ID as seen in localStorage
       localStorage.setItem(`announcement_dismissed_${announcement.id}`, 'true');
     }
     setIsOpen(false);
@@ -62,7 +62,7 @@ export default function AnnouncementModal({ userId }: AnnouncementModalProps) {
         {/* Close X Button */}
         <button
           onClick={handleDismiss}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white font-bold text-sm"
+          className="absolute top-4 right-4 text-gray-400 hover:text-white font-bold text-sm z-10"
         >
           ✕
         </button>
@@ -82,18 +82,45 @@ export default function AnnouncementModal({ userId }: AnnouncementModalProps) {
           </div>
         </div>
 
+        {/* Optional Announcement Image */}
+        {announcement.image_url && (
+          <div className="w-full rounded-xl overflow-hidden border border-gray-800 max-h-48 bg-gray-950 flex items-center justify-center">
+            <img
+              src={announcement.image_url}
+              alt="Announcement banner"
+              className="w-full h-full object-cover"
+            />
+          </div>
+        )}
+
         {/* Body Content */}
         <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-line">
           {announcement.content}
         </p>
 
-        {/* Action Button */}
-        <button
-          onClick={handleDismiss}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition-colors mt-1 shadow-lg"
-        >
-          Got it!
-        </button>
+        {/* Action Buttons */}
+        <div className="flex flex-col gap-2 mt-1">
+          {/* Optional Hyperlink / CTA Button */}
+          {announcement.link_url && (
+            <a
+              href={announcement.link_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={handleDismiss}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-xl text-xs transition-colors text-center shadow-lg flex items-center justify-center gap-1.5"
+            >
+              <span>{announcement.link_text || 'Learn More'}</span>
+              <span className="text-[10px]">↗</span>
+            </a>
+          )}
+
+          <button
+            onClick={handleDismiss}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs transition-colors shadow-lg"
+          >
+            Got it!
+          </button>
+        </div>
       </div>
     </div>
   );
