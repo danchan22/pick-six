@@ -15,6 +15,7 @@ import PickHistoryModal from '@/components/Modals/PickHistoryModal';
 import TeamsAvailableModal from '@/components/Modals/TeamsAvailableModal';
 import HelpModal from '@/components/Modals/HelpModal';
 import WeeklyRecapModal from '@/components/Modals/WeeklyRecapModal';
+import AnnouncementModal from '@/components/AnnouncementModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'stats' | 'rules' | 'admin'>('picks');
@@ -60,7 +61,6 @@ export default function Home() {
   };
 
   const fetchCurrentWeek = async () => {
-    // Active week is the earliest NFL week (1-18) where games are not yet finalized ('post')
     const { data } = await supabase
       .from('games')
       .select('week')
@@ -73,7 +73,6 @@ export default function Home() {
     const activeW = data && data.length > 0 ? data[0].week : 1;
     setCurrentWeek(activeW);
 
-    // Auto-trigger weekly recap ONLY when Week 1 finishes and user transitions to Week 2+
     if (activeW > 1) {
       const prevW = activeW - 1;
       const seenKey = `picksix_recap_seen_week_${prevW}`;
@@ -318,6 +317,9 @@ export default function Home() {
             userId={session.user.id}
             week={recapWeek}
           />
+
+          {/* Announcement Modal Popup */}
+          <AnnouncementModal userId={session.user.id} />
         </>
       )}
 
