@@ -15,7 +15,6 @@ export async function GET(req: NextRequest) {
 
   try {
     if (fullSeason) {
-      // Full 18-week sweep (Run on Tuesdays/Admin sync)
       for (let w = 1; w <= 18; w++) {
         const res = await fetch(
           `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=${seasonYear}&seasontype=2&week=${w}`,
@@ -26,7 +25,6 @@ export async function GET(req: NextRequest) {
         totalImported += await upsertGames(data.events || [], w, seasonYear);
       }
     } else {
-      // Fast live scoreboard sync (Only fetches active week in ~300ms)
       const res = await fetch(
         `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?seasontype=2`,
         { cache: 'no-store' }
@@ -100,5 +98,47 @@ async function upsertGames(events: any[], weekNum: number, seasonYear: number) {
     .from('games')
     .upsert(gamesToUpsert, { onConflict: 'id' });
 
-  return error ? 0 : gamesToUpsert.length;
+  if (error) return 0;
+
+  // Score picks for finished games
+  const completedGameIds = gamesToUpsert
+    .filter((g: any) => g.status === 'post' || g.status === 'canceled')
+    .map((g: any) => g.id);
+
+  if (completedGameIds.length > 0) {
+    const { data: picksToScore } = await supabaseAdmin
+      .from('picks')
+      .select('*, games(*)')
+      .in('game_id', completedGameIds);
+
+    if (picksToScore && picksToScore.length > 0) {
+      for (const pick of picksToScore) {
+        const game = pick.games;
+        let points = 0.0;
+
+        if (game.status === 'canceled') {
+          points = 0.0;
+        } else if (game.status === 'post') {
+          const isWin = pick.selected_team === game.winner_team;
+
+          if (pick.is_lock) {
+            // Lock of the Week: Win (+2), Tie (-1), Loss (-1)
+            points = isWin ? 2.0 : -1.0;
+          } else {
+            // Standard Pick: Win (+1), Tie (+0.5), Loss (0)
+            if (isWin) points = 1.0;
+            else if (game.winner_team === 'TIE') points = 0.5;
+            else points = 0.0;
+          }
+        }
+
+        await supabaseAdmin
+          .from('picks')
+          .update({ points_awarded: points })
+          .eq('id', pick.id);
+      }
+    }
+  }
+
+  return gamesToUpsert.length;
 }
