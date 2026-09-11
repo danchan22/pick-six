@@ -62,6 +62,7 @@ async function upsertGames(events: any[], weekNum: number, seasonYear: number) {
 
     const statusState = event.status?.type?.state || 'pre';
     const statusName = event.status?.type?.name;
+    const statusDetail = event.status?.type?.detail || '';
     const isCompleted = event.status?.type?.completed || statusState === 'post' || statusName === 'STATUS_FINAL';
 
     let gameStatus = statusState;
@@ -89,6 +90,7 @@ async function upsertGames(events: any[], weekNum: number, seasonYear: number) {
       away_score: parseInt(away.score || 0, 10),
       kickoff_time: event.date,
       status: gameStatus,
+      game_detail: statusDetail,
       winner_team: winnerTeam,
       updated_at: new Date().toISOString(),
     };
