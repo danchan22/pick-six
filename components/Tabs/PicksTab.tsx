@@ -58,6 +58,27 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
     fetchSeasonTeamCounts();
   }, [selectedWeek, userId]);
 
+useEffect(() => {
+  const channel = supabase
+    .channel('realtime-games')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'games' },
+      (payload) => {
+        setGames((prevGames) =>
+          prevGames.map((game) =>
+            game.id === payload.new.id ? { ...game, ...payload.new } : game
+          )
+        );
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
+  
   const fetchWeekGames = async () => {
     const { data } = await supabase
       .from('games')
