@@ -16,6 +16,7 @@ import TeamsAvailableModal from '@/components/Modals/TeamsAvailableModal';
 import HelpModal from '@/components/Modals/HelpModal';
 import WeeklyRecapModal from '@/components/Modals/WeeklyRecapModal';
 import AnnouncementModal from '@/components/Modals/AnnouncementModal';
+import ResetPasswordModal from '@/components/Modals/ResetPasswordModal';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'picks' | 'leaderboard' | 'stats' | 'rules' | 'admin'>('picks');
@@ -27,6 +28,7 @@ export default function Home() {
   const [isTeamsAvailableOpen, setIsTeamsAvailableOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isRecapOpen, setIsRecapOpen] = useState(false);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
   const [recapWeek, setRecapWeek] = useState(1);
   const [loading, setLoading] = useState(true);
   const [currentWeek, setCurrentWeek] = useState(1);
@@ -44,9 +46,14 @@ export default function Home() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUserMenuOpen(false);
       setSession(session);
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsResetPasswordOpen(true);
+      }
+
       if (session?.user) loadProfile(session.user.id);
       else setProfile(null);
     });
@@ -320,6 +327,12 @@ export default function Home() {
 
           {/* Announcement Modal Popup */}
           <AnnouncementModal userId={session.user.id} />
+
+          {/* New Password Reset Modal Popup */}
+          <ResetPasswordModal
+            isOpen={isResetPasswordOpen}
+            onClose={() => setIsResetPasswordOpen(false)}
+          />
         </>
       )}
 
