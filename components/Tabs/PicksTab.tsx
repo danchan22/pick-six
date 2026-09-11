@@ -336,7 +336,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                     }
                   }
 
-                  // Styled Score Box Colors (Supports Live & Final)
+                  // Styled Score Box Colors
                   let scoreBoxStyle = 'bg-gray-800 border-gray-700 text-gray-300';
                   if (isFinished) {
                     if (isWinner) {
@@ -347,7 +347,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                       scoreBoxStyle = 'bg-red-950/60 border-red-500/60 text-red-400 font-bold';
                     }
                   } else if (isLive) {
-                    scoreBoxStyle = 'bg-red-950/50 border-red-500/60 text-white font-black ring-1 ring-red-500/40';
+                    scoreBoxStyle = 'bg-gray-950/80 border-gray-400 text-white font-black';
                   }
 
                   return (
