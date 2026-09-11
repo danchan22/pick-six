@@ -285,6 +285,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
           const formattedKickoff = `${dayName} ${month}/${day} • ${timeStr}`;
 
           const isFinished = game.status === 'post';
+          const isLive = game.status === 'in';
 
           return (
             <div
@@ -293,11 +294,15 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
             >
               <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
                 <span>{formattedKickoff}</span>
-                {isFinished && (
+                {isFinished ? (
                   <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
                     FINAL
                   </span>
-                )}
+                ) : isLive ? (
+                  <span className="text-[10px] font-mono font-bold text-red-500 uppercase tracking-wider animate-pulse flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> LIVE
+                  </span>
+                ) : null}
               </div>
 
               {/* Align items to top */}
@@ -331,7 +336,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                     }
                   }
 
-                  // Styled Score Box Colors
+                  // Styled Score Box Colors (Supports Live & Final)
                   let scoreBoxStyle = 'bg-gray-800 border-gray-700 text-gray-300';
                   if (isFinished) {
                     if (isWinner) {
@@ -341,6 +346,8 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                     } else {
                       scoreBoxStyle = 'bg-red-950/60 border-red-500/60 text-red-400 font-bold';
                     }
+                  } else if (isLive) {
+                    scoreBoxStyle = 'bg-red-950/50 border-red-500/60 text-white font-black ring-1 ring-red-500/40';
                   }
 
                   return (
@@ -370,7 +377,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                         </div>
 
                         <div className="flex flex-col items-end flex-shrink-0">
-                          {isFinished && team.score !== undefined && team.score !== null ? (
+                          {(isFinished || isLive) && team.score !== undefined && team.score !== null ? (
                             <div className={`px-2 py-0.5 rounded border text-xs font-mono ${scoreBoxStyle}`}>
                               {team.score}
                             </div>
