@@ -30,11 +30,25 @@ export default function LeaderboardTab() {
 
     const computed = profiles.map((p) => {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
-      const totalPoints = userPicks.reduce((acc, curr) => acc + (curr.points_awarded || 0), 0);
+      
+      const totalPoints = userPicks.reduce((acc, curr) => {
+        const game = curr.games;
+        if (game?.status === 'post') {
+          const isWin = curr.selected_team === game.winner_team;
+          if (curr.is_lock) {
+            return acc + (isWin ? 2.0 : -1.0);
+          } else {
+            if (isWin) return acc + 1.0;
+            if (game.winner_team === 'TIE') return acc + 0.5;
+            return acc;
+          }
+        }
+        return acc + (curr.points_awarded || 0);
+      }, 0);
 
       const completedPicks = userPicks.filter((pick) => pick.games?.status === 'post');
-      const wins = completedPicks.filter((pick) => (pick.points_awarded || 0) > 0).length;
-      const losses = completedPicks.filter((pick) => (pick.points_awarded || 0) < 0 || (pick.points_awarded === 0 && pick.games?.winner_team !== 'TIE')).length;
+      const wins = completedPicks.filter((pick) => pick.selected_team === pick.games?.winner_team).length;
+      const losses = completedPicks.filter((pick) => pick.selected_team !== pick.games?.winner_team && pick.games?.winner_team !== 'TIE').length;
 
       return {
         ...p,
@@ -232,7 +246,20 @@ export default function LeaderboardTab() {
                   let outcome = '';
                   let outcomeBadgeColor = 'text-gray-400';
                   let cardBgBorder = 'bg-gray-800/80 border-gray-700/80';
-                  const pts = pick.points_awarded ?? 0;
+                  
+                  // Calculate score points dynamically
+                  let pts = pick.points_awarded ?? 0;
+                  if (isFinished) {
+                    const isWin = game.winner_team === pick.selected_team;
+                    if (pick.is_lock) {
+                      pts = isWin ? 2.0 : -1.0;
+                    } else {
+                      if (isWin) pts = 1.0;
+                      else if (game.winner_team === 'TIE') pts = 0.5;
+                      else pts = 0.0;
+                    }
+                  }
+
                   let formattedPts = '0';
                   let ptsColor = 'text-gray-400';
 
