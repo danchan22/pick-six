@@ -48,7 +48,7 @@ export default function AuthModal({ isOpen, onSuccess }: AuthModalProps) {
     setSuccessMsg(null);
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}`,
+      redirectTo: 'https://picksixleague.com/#reset-password',
     });
 
     if (error) {
