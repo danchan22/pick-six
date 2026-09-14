@@ -4,6 +4,36 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamNickname, getTeamLogoUrl, getTeamAbbr } from '@/lib/nflTeams';
 
+// Inject custom gold shimmer animation
+const __GOLD_SHIMMER_STYLES = `
+@keyframes goldShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.gold-shimmer-card {
+  background: linear-gradient(
+    110deg,
+    rgba(245, 158, 11, 0.08) 20%,
+    rgba(251, 191, 36, 0.28) 35%,
+    rgba(245, 158, 11, 0.08) 50%
+  );
+  background-size: 200% 100%;
+  animation: goldShimmer 3.5s infinite linear;
+}
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('gold-shimmer-styles')) {
+  const styleEl = document.createElement('style');
+  styleEl.id = 'gold-shimmer-styles';
+  styleEl.textContent = __GOLD_SHIMMER_STYLES;
+  document.head.appendChild(styleEl);
+}
+
 export default function LeaderboardTab() {
   const [standings, setStandings] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -64,10 +94,8 @@ export default function LeaderboardTab() {
       };
     });
 
-    // Sort by points descending, then tiebreaker by total wins
     computed.sort((a, b) => b.totalPoints - a.totalPoints || b.wins - a.wins);
 
-    // Calculate tie-aware rankings
     let currentRank = 1;
     const rankedStandings = computed.map((user, index, arr) => {
       if (index > 0) {
@@ -116,8 +144,6 @@ export default function LeaderboardTab() {
     setMemberPicks(orderedPicks);
   };
 
-  const highestScore = standings[0]?.totalPoints;
-
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
       <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
@@ -136,12 +162,10 @@ export default function LeaderboardTab() {
 
           let cardStyle = 'bg-gray-900 border-gray-800';
           if (isFirstPlace) {
-            cardStyle =
-              'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-gray-900 border-amber-500/40 shadow-lg shadow-amber-500/10';
+            cardStyle = 'gold-shimmer-card border-amber-500/50 shadow-lg shadow-amber-500/10';
           }
           if (isCurrentUser) {
-            cardStyle +=
-              ' border-emerald-500 shadow-lg ring-1 ring-emerald-500 bg-emerald-950/40';
+            cardStyle += ' border-emerald-500 shadow-lg ring-1 ring-emerald-500';
           }
 
           return (
