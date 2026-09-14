@@ -4,6 +4,49 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamNickname, getTeamLogoUrl, getTeamAbbr } from '@/lib/nflTeams';
 
+// Inject transitions.dev custom curves & modal spring animation
+const __STANDINGS_TRANSITIONS = `
+:root {
+  --modal-open-dur: 350ms;
+  --modal-close-dur: 250ms;
+  --modal-spring-ease: cubic-bezier(0.34, 1.25, 0.64, 1);
+  --modal-exit-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes modalMorphIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-modal-backdrop {
+  animation: backdropFadeIn var(--modal-open-dur) var(--modal-exit-ease) forwards;
+}
+
+.animate-modal-card {
+  animation: modalMorphIn var(--modal-open-dur) var(--modal-spring-ease) forwards;
+}
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('standings-morph-styles')) {
+  const styleEl = document.createElement('style');
+  styleEl.id = 'standings-morph-styles';
+  styleEl.textContent = __STANDINGS_TRANSITIONS;
+  document.head.appendChild(styleEl);
+}
+
 export default function LeaderboardTab() {
   const [standings, setStandings] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -116,8 +159,6 @@ export default function LeaderboardTab() {
     setMemberPicks(orderedPicks);
   };
 
-  const highestScore = standings[0]?.totalPoints;
-
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
       <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
@@ -148,7 +189,7 @@ export default function LeaderboardTab() {
             <div key={user.id} className="flex flex-col gap-2">
               <div
                 onClick={() => setSelectedMember(user)}
-                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500/50 ${cardStyle}`}
+                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500/50 hover:scale-[1.01] active:scale-[0.99] ${cardStyle}`}
               >
                 <div className="flex items-center gap-3">
                   <span className="font-extrabold text-sm font-mono w-6 text-center text-gray-400">
@@ -223,12 +264,13 @@ export default function LeaderboardTab() {
         })}
       </div>
 
+      {/* Morph Animated Member Modal */}
       {selectedMember && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-5 shadow-2xl relative flex flex-col gap-3">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-modal-backdrop">
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-md p-5 shadow-2xl relative flex flex-col gap-3 animate-modal-card">
             <button
               onClick={() => setSelectedMember(null)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-white font-bold text-sm"
+              className="absolute top-4 right-4 text-gray-400 hover:text-white font-bold text-sm transition-transform active:scale-90"
             >
               ✕
             </button>
