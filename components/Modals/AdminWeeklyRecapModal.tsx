@@ -22,6 +22,7 @@ export default function AdminWeeklyRecapModal({
 
   const [mostPopularPicks, setMostPopularPicks] = useState<any[]>([]);
   const [upsets, setUpsets] = useState<any[]>([]);
+  const [bustedLocks, setBustedLocks] = useState<any[]>([]);
   const [perfectUsers, setPerfectUsers] = useState<any[]>([]);
   const [topStandings, setTopStandings] = useState<any[]>([]);
 
@@ -47,7 +48,7 @@ export default function AdminWeeklyRecapModal({
 
     const { data: allPicks } = await supabase
       .from('picks')
-      .select('*, games(*)');
+      .select('*, games(*), profiles(*)');
 
     const { data: profiles } = await supabase
       .from('profiles')
@@ -60,7 +61,7 @@ export default function AdminWeeklyRecapModal({
 
     const weekPicks = allPicks.filter((p) => p.week === selectedWeek);
 
-    // 1. Most Popular Picks & Upsets
+    // 1. Most Popular Picks & Upsets Calculation
     const teamPickCounts: Record<string, number> = {};
     weekPicks.forEach((p) => {
       teamPickCounts[p.selected_team] = (teamPickCounts[p.selected_team] || 0) + 1;
@@ -87,7 +88,7 @@ export default function AdminWeeklyRecapModal({
     teamList.sort((a, b) => b.count - a.count);
     setMostPopularPicks(teamList.slice(0, 3));
 
-    // Upsets: More people picked Team A than Team B, but Team A lost
+    // 2. Upsets This Week (More people picked Team A than Team B, but Team A lost)
     const qualifiedUpsets: any[] = [];
     gamePickStats.forEach(({ game, homeTeam, awayTeam, homePicks, awayPicks }) => {
       if (game.status !== 'post') return;
@@ -114,7 +115,16 @@ export default function AdminWeeklyRecapModal({
     qualifiedUpsets.sort((a, b) => b.count - a.count);
     setUpsets(qualifiedUpsets);
 
-    // 2. Perfect Weeks
+    // 3. Locks Busted
+    const bustedLockPicks = weekPicks.filter((p) => {
+      const game = p.games;
+      if (!p.is_lock || !game || game.status !== 'post') return false;
+      return game.winner_team !== p.selected_team && game.winner_team !== 'TIE';
+    });
+
+    setBustedLocks(bustedLockPicks);
+
+    // 4. Perfect Weeks
     const userWeekStats: Record<string, { wins: number; losses: number; total: number }> = {};
     profiles.forEach((p) => {
       userWeekStats[p.id] = { wins: 0, losses: 0, total: 0 };
@@ -140,7 +150,7 @@ export default function AdminWeeklyRecapModal({
     const perfectProfiles = profiles.filter((p) => perfectUserIds.includes(p.id));
     setPerfectUsers(perfectProfiles);
 
-    // 3. Current Standings (Top 3)
+    // 5. Current Standings (Top 3)
     const userScores: Record<string, number> = {};
     const userWins: Record<string, number> = {};
     const userLosses: Record<string, number> = {};
@@ -185,12 +195,25 @@ export default function AdminWeeklyRecapModal({
 
     try {
       const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
-      const link = document.createElement('a');
-      link.download = `PickSix_Week_${selectedWeek}_Recap.png`;
-      link.href = dataUrl;
-      link.click();
+      
+      // Check if Web Share API is available (Mobile photo save/share)
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], `PickSix_Week_${selectedWeek}_Recap.png`, { type: 'image/png' });
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: `Week ${selectedWeek} Recap`,
+        });
+      } else {
+        // Fallback for desktop downloads
+        const link = document.createElement('a');
+        link.download = `PickSix_Week_${selectedWeek}_Recap.png`;
+        link.href = dataUrl;
+        link.click();
+      }
     } catch (err) {
-      console.error('Failed to capture image', err);
+      console.error('Failed to capture or share image', err);
     } finally {
       setDownloading(false);
     }
@@ -201,7 +224,7 @@ export default function AdminWeeklyRecapModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
       <div className="flex flex-col items-center gap-3 w-full max-w-md my-auto">
-        {/* Controls Header */}
+        {/* Controls Bar */}
         <div className="flex items-center justify-between w-full bg-gray-900 border border-gray-800 p-2.5 rounded-xl text-white">
           <div className="flex items-center gap-2">
             <button
@@ -237,7 +260,7 @@ export default function AdminWeeklyRecapModal({
               disabled={loading || downloading}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 shadow transition-colors disabled:opacity-50"
             >
-              <span>{downloading ? 'Exporting...' : '📸 Save Image'}</span>
+              <span>{downloading ? 'Exporting...' : 'Save Image'}</span>
             </button>
 
             <button
@@ -249,7 +272,7 @@ export default function AdminWeeklyRecapModal({
           </div>
         </div>
 
-        {/* Export Card View */}
+        {/* Export Card Area */}
         <div
           ref={cardRef}
           className="bg-gray-950 border border-gray-800 rounded-2xl w-full p-6 relative flex flex-col gap-5 text-white shadow-2xl"
@@ -292,6 +315,7 @@ export default function AdminWeeklyRecapModal({
                       const teamScore = game ? (isHome ? game.home_score : game.away_score) : 0;
                       const oppScore = game ? (isHome ? game.away_score : game.home_score) : 0;
                       const isFinished = game?.status === 'post';
+                      const isWin = isFinished && game.winner_team === item.team;
 
                       return (
                         <div
@@ -318,8 +342,14 @@ export default function AdminWeeklyRecapModal({
                           </div>
 
                           {isFinished && (
-                            <div className="px-2 py-0.5 rounded border border-gray-700 bg-gray-800 text-xs font-mono font-bold text-gray-200">
-                              {teamScore}-{oppScore}
+                            <div
+                              className={`px-2.5 py-0.5 rounded border text-xs font-mono font-bold shadow ${
+                                isWin
+                                  ? 'bg-emerald-600 border-emerald-500 text-white'
+                                  : 'bg-red-600 border-red-500 text-white'
+                              }`}
+                            >
+                              {isWin ? 'W' : 'L'} {teamScore}-{oppScore}
                             </div>
                           )}
                         </div>
@@ -329,11 +359,11 @@ export default function AdminWeeklyRecapModal({
                 </div>
               </div>
 
-              {/* Upsets of the Week */}
+              {/* Upsets This Week */}
               {upsets.length > 0 && (
                 <div className="flex flex-col gap-2">
                   <h3 className="text-xs font-extrabold text-red-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🚨</span> UPSETS OF THE WEEK
+                    <span>🚨</span> UPSETS THIS WEEK
                   </h3>
 
                   <div className="flex flex-col gap-1.5">
@@ -367,9 +397,53 @@ export default function AdminWeeklyRecapModal({
                             </div>
                           </div>
 
-                          <div className="px-2 py-0.5 rounded border border-red-500/50 bg-red-950/60 text-xs font-mono font-bold text-red-300">
+                          <div className="px-2.5 py-0.5 rounded border border-red-500 bg-red-600 text-xs font-mono font-bold text-white shadow">
                             L {teamScore}-{oppScore}
                           </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Locks Busted */}
+              {bustedLocks.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🔒</span> LOCKS BUSTED
+                  </h3>
+
+                  <div className="flex flex-col gap-1.5">
+                    {bustedLocks.map((pick) => {
+                      const firstName = pick.profiles?.first_name?.trim();
+                      const lastInitial = pick.profiles?.last_name?.trim()?.slice(0, 1);
+                      const displayName = firstName
+                        ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}`
+                        : pick.profiles?.team_name || 'Unknown';
+
+                      return (
+                        <div
+                          key={pick.id}
+                          className="bg-gray-900 border border-amber-500/40 p-2.5 rounded-xl flex items-center justify-between text-xs"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <img
+                              src={getTeamLogoUrl(pick.selected_team)}
+                              alt=""
+                              className="w-6 h-6 object-contain"
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-bold text-white">{displayName}</span>
+                              <span className="text-[10px] text-amber-300 font-semibold">
+                                Lock: {getTeamNickname(pick.selected_team)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="text-xs font-mono font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded">
+                            -1.0 pt
+                          </span>
                         </div>
                       );
                     })}
