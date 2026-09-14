@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamNickname, getTeamLogoUrl } from '@/lib/nflTeams';
-import WeeklyRecapModal from '@/components/Modals/WeeklyRecapModal';
+import AdminWeeklyRecapModal from '@/components/Modals/AdminWeeklyRecapModal';
 
 interface AdminTabProps {
   currentWeek?: number;
@@ -27,7 +27,7 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
   const [allWeekPicks, setAllWeekPicks] = useState<any[]>([]);
   const [adminActionStatus, setAdminActionStatus] = useState<string | null>(null);
 
-  const [isPreviewRecapOpen, setIsPreviewRecapOpen] = useState(false);
+  const [isAdminRecapOpen, setIsAdminRecapOpen] = useState(false);
 
   useEffect(() => {
     if (currentWeek) setSelectedWeek(currentWeek);
@@ -246,10 +246,10 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsPreviewRecapOpen(true)}
+            onClick={() => setIsAdminRecapOpen(true)}
             className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
           >
-            <span>👁️</span> Preview Recap
+            <span>📸</span> Weekly Recap
           </button>
           <button
             onClick={handleExportCSV}
@@ -631,14 +631,12 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
         </div>
       )}
 
-      {selectedUserId && (
-        <WeeklyRecapModal
-          isOpen={isPreviewRecapOpen}
-          onClose={() => setIsPreviewRecapOpen(false)}
-          userId={selectedUserId}
-          week={selectedWeek}
-        />
-      )}
+      {/* Admin Weekly Recap Exporter Modal */}
+      <AdminWeeklyRecapModal
+        isOpen={isAdminRecapOpen}
+        onClose={() => setIsAdminRecapOpen(false)}
+        initialWeek={selectedWeek}
+      />
     </div>
   );
 }
