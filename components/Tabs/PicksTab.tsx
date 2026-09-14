@@ -46,6 +46,7 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   const [allWeekPicks, setAllWeekPicks] = useState<Pick[]>([]);
   const [teamPickCounts, setTeamPickCounts] = useState<Record<string, number>>({});
   const [selectedSlotForSwap, setSelectedSlotForSwap] = useState<number | null>(null);
+  const [showOnlyMyPicks, setShowOnlyMyPicks] = useState(false);
 
   useEffect(() => {
     if (currentWeek) setSelectedWeek(currentWeek);
@@ -189,12 +190,11 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
   const handleSlotClick = async (index: number) => {
     if (isChaosWeek) return;
     const currentSlotPick = pickSlots[index];
-    
-    // Check if the pick associated with this slot belongs to a game that has started
+
     if (currentSlotPick) {
       const slotGame = games.find((g) => g.id === currentSlotPick.game_id) || currentSlotPick.games;
       if (slotGame && isGameLocked(slotGame.kickoff_time)) {
-        return; // Prevent swapping or deleting locked games
+        return;
       }
     }
 
@@ -206,7 +206,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
       const firstPick = pickSlots[selectedSlotForSwap];
       const secondPick = currentSlotPick;
 
-      // Prevent swap if the target slot contains a locked game
       if (firstPick) {
         const firstGame = games.find((g) => g.id === firstPick.game_id) || firstPick.games;
         if (firstGame && isGameLocked(firstGame.kickoff_time)) return;
@@ -245,6 +244,21 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
       }
     }
   };
+
+  // Sort games so FINAL (status === 'post') are pushed to the bottom
+  const sortedGames = [...games].sort((a, b) => {
+    const aFinished = a.status === 'post';
+    const bFinished = b.status === 'post';
+    if (aFinished && !bFinished) return 1;
+    if (!aFinished && bFinished) return -1;
+    return new Date(a.kickoff_time).getTime() - new Date(b.kickoff_time).getTime();
+  });
+
+  // Filter games when "Show Only My Picks" is active
+  const userPickedGameIds = new Set(picks.map((p) => p.game_id));
+  const displayedGames = showOnlyMyPicks
+    ? sortedGames.filter((g) => userPickedGameIds.has(g.id))
+    : sortedGames;
 
   return (
     <div className="flex flex-col gap-4 pb-64 max-w-2xl mx-auto px-4 pt-4 text-white">
@@ -294,6 +308,35 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
         </span>
       </div>
 
+      {/* Filter Options Bar */}
+      <div className="flex items-center justify-between px-0.5">
+        <button
+          onClick={() => setShowOnlyMyPicks(!showOnlyMyPicks)}
+          className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+            showOnlyMyPicks
+              ? 'bg-emerald-600/30 border-emerald-500 text-emerald-300 ring-1 ring-emerald-500/50 shadow-md'
+              : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
+          }`}
+        >
+          <span>🎯</span>
+          <span>{showOnlyMyPicks ? 'Showing My Picks' : 'Show Only My Picks'}</span>
+          {showOnlyMyPicks && (
+            <span className="ml-1 text-[10px] bg-emerald-500 text-black px-1.5 rounded-full font-black">
+              {picks.length}
+            </span>
+          )}
+        </button>
+
+        {showOnlyMyPicks && (
+          <button
+            onClick={() => setShowOnlyMyPicks(false)}
+            className="text-[11px] text-gray-400 hover:text-white underline font-medium"
+          >
+            Show All Games
+          </button>
+        )}
+      </div>
+
       {/* Week 18 Chaos Week Banner */}
       {isChaosWeek && (
         <div className="bg-gradient-to-r from-purple-950/80 to-indigo-950/80 border-2 border-purple-500/80 p-4 rounded-xl shadow-2xl flex flex-col gap-1 text-center">
@@ -308,166 +351,186 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
 
       {/* Matchup Schedule Cards */}
       <div className="flex flex-col gap-3">
-        {games.map((game) => {
-          const locked = isGameLocked(game.kickoff_time);
-          const currentPick = picks.find((p) => p.game_id === game.id);
-          const homeNickname = getTeamNickname(game.home_team);
-          const awayNickname = getTeamNickname(game.away_team);
-
-          const kickoffDate = new Date(game.kickoff_time);
-          const dayName = kickoffDate.toLocaleDateString('en-US', { weekday: 'short' });
-          const month = kickoffDate.getMonth() + 1;
-          const day = kickoffDate.getDate();
-          const timeStr = kickoffDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-          const formattedKickoff = `${dayName} ${month}/${day} • ${timeStr}`;
-
-          const isFinished = game.status === 'post';
-          const isLive = game.status === 'in';
-
-          return (
-            <div
-              key={game.id}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2.5"
+        {displayedGames.length === 0 ? (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center flex flex-col items-center gap-2">
+            <span className="text-2xl">🏈</span>
+            <p className="text-xs text-gray-400 font-medium">
+              You haven't made any picks for Week {selectedWeek} yet.
+            </p>
+            <button
+              onClick={() => setShowOnlyMyPicks(false)}
+              className="mt-2 text-xs text-emerald-400 font-bold hover:underline"
             >
-              <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
-                <span>{formattedKickoff}</span>
-                {isFinished ? (
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
-                    FINAL
-                  </span>
-                ) : isLive ? (
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
-                    <span className="text-white">
-                      {game.game_detail || 'LIVE'}
+              Browse all games
+            </button>
+          </div>
+        ) : (
+          displayedGames.map((game) => {
+            const locked = isGameLocked(game.kickoff_time);
+            const currentPick = picks.find((p) => p.game_id === game.id);
+            const homeNickname = getTeamNickname(game.home_team);
+            const awayNickname = getTeamNickname(game.away_team);
+
+            const kickoffDate = new Date(game.kickoff_time);
+            const dayName = kickoffDate.toLocaleDateString('en-US', { weekday: 'short' });
+            const month = kickoffDate.getMonth() + 1;
+            const day = kickoffDate.getDate();
+            const timeStr = kickoffDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            const formattedKickoff = `${dayName} ${month}/${day} • ${timeStr}`;
+
+            const isFinished = game.status === 'post';
+            const isLive = game.status === 'in';
+
+            return (
+              <div
+                key={game.id}
+                className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2.5"
+              >
+                <div className="flex justify-between items-center text-[11px] text-gray-400 border-b border-gray-800 pb-1.5">
+                  <span>{formattedKickoff}</span>
+                  {isFinished ? (
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                      FINAL
                     </span>
-                    <span className="text-gray-400">•</span>
-                    <span className="text-red-500 animate-pulse">
-                      LIVE
+                  ) : isLive ? (
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider flex items-center gap-1">
+                      <span className="text-white">
+                        {game.game_detail || 'LIVE'}
+                      </span>
+                      <span className="text-gray-400">•</span>
+                      <span className="text-red-500 animate-pulse">
+                        LIVE
+                      </span>
                     </span>
-                  </span>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
 
-              {/* Align items to top */}
-              <div className="grid grid-cols-2 gap-2 items-start">
-                {[
-                  { full: game.away_team, nick: awayNickname, record: game.away_record, score: game.away_score },
-                  { full: game.home_team, nick: homeNickname, record: game.home_record, score: game.home_score },
-                ].map((team) => {
-                  const isSelected = currentPick?.selected_team === team.full;
-                  const isLock = isSelected && currentPick?.is_lock;
-                  const count = teamPickCounts[team.full] || 0;
-                  const disabled = locked || (!isChaosWeek && count >= 6 && !isSelected);
+                {/* Align items to top */}
+                <div className="grid grid-cols-2 gap-2 items-start">
+                  {[
+                    { full: game.away_team, nick: awayNickname, record: game.away_record, score: game.away_score },
+                    { full: game.home_team, nick: homeNickname, record: game.home_record, score: game.home_score },
+                  ].map((team) => {
+                    const isSelected = currentPick?.selected_team === team.full;
+                    const isLock = isSelected && currentPick?.is_lock;
+                    const count = teamPickCounts[team.full] || 0;
+                    const disabled = locked || (!isChaosWeek && count >= 6 && !isSelected);
 
-                  const teamPicks = allWeekPicks.filter(
-                    (p) => p.game_id === game.id && p.selected_team === team.full
-                  );
+                    // Fetch team picks and sort alphabetically by first name
+                    const teamPicks = allWeekPicks
+                      .filter((p) => p.game_id === game.id && p.selected_team === team.full)
+                      .sort((a, b) => {
+                        const nameA = a.profiles?.first_name || a.profiles?.team_name || '';
+                        const nameB = b.profiles?.first_name || b.profiles?.team_name || '';
+                        return nameA.localeCompare(nameB);
+                      });
 
-                  const isWinner = isFinished && game.winner_team === team.full;
-                  const isTie = isFinished && game.winner_team === 'TIE';
+                    const isWinner = isFinished && game.winner_team === team.full;
+                    const isTie = isFinished && game.winner_team === 'TIE';
 
-                  let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
-                  if (isSelected) {
+                    let btnColor = 'bg-gray-800/80 border-gray-700/80 text-gray-300 hover:border-gray-500';
+                    if (isSelected) {
+                      if (isFinished) {
+                        if (isWinner) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
+                        else if (isTie) btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
+                        else btnColor = 'bg-red-600/30 border-red-500 text-white font-bold';
+                      } else if (isLock) {
+                        btnColor = 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-lg ring-1 ring-amber-400/50';
+                      } else {
+                        btnColor = 'bg-blue-600/30 border-blue-500 text-white font-bold';
+                      }
+                    }
+
+                    // Styled Score Box Colors
+                    let scoreBoxStyle = 'bg-gray-800 border-gray-700 text-gray-300';
                     if (isFinished) {
-                      if (isWinner) btnColor = 'bg-emerald-600/30 border-emerald-500 text-white font-bold';
-                      else if (isTie) btnColor = 'bg-amber-600/30 border-amber-500 text-white font-bold';
-                      else btnColor = 'bg-red-600/30 border-red-500 text-white font-bold';
-                    } else if (isLock) {
-                      btnColor = 'bg-amber-500/20 border-amber-400 text-amber-300 font-bold shadow-lg ring-1 ring-amber-400/50';
-                    } else {
-                      btnColor = 'bg-blue-600/30 border-blue-500 text-white font-bold';
+                      if (isWinner) {
+                        scoreBoxStyle = 'bg-emerald-950/60 border-emerald-500/60 text-emerald-400 font-extrabold';
+                      } else if (isTie) {
+                        scoreBoxStyle = 'bg-amber-950/60 border-amber-500/60 text-amber-400 font-extrabold';
+                      } else {
+                        scoreBoxStyle = 'bg-red-950/60 border-red-500/60 text-red-400 font-bold';
+                      }
+                    } else if (isLive) {
+                      scoreBoxStyle = 'bg-gray-950/80 border-gray-400 text-white font-black';
                     }
-                  }
 
-                  // Styled Score Box Colors
-                  let scoreBoxStyle = 'bg-gray-800 border-gray-700 text-gray-300';
-                  if (isFinished) {
-                    if (isWinner) {
-                      scoreBoxStyle = 'bg-emerald-950/60 border-emerald-500/60 text-emerald-400 font-extrabold';
-                    } else if (isTie) {
-                      scoreBoxStyle = 'bg-amber-950/60 border-amber-500/60 text-amber-400 font-extrabold';
-                    } else {
-                      scoreBoxStyle = 'bg-red-950/60 border-red-500/60 text-red-400 font-bold';
-                    }
-                  } else if (isLive) {
-                    scoreBoxStyle = 'bg-gray-950/80 border-gray-400 text-white font-black';
-                  }
+                    return (
+                      <button
+                        key={team.full}
+                        disabled={disabled}
+                        onClick={() => handleSelectTeam(game.id, team.full)}
+                        className={`p-2.5 rounded-lg border flex flex-col justify-start transition-all ${btnColor} ${
+                          disabled && !locked ? 'opacity-40 cursor-not-allowed' : locked ? 'cursor-default' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <img
+                              src={getTeamLogoUrl(team.full)}
+                              alt={team.nick}
+                              className="w-6 h-6 object-contain flex-shrink-0"
+                            />
+                            <div className="flex flex-col items-start truncate">
+                              <span className="text-xs font-semibold truncate">{team.nick}</span>
+                              {!isChaosWeek && (
+                                <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
+                                  Picked {count}/6
+                                </span>
+                              )}
+                            </div>
+                          </div>
 
-                  return (
-                    <button
-                      key={team.full}
-                      disabled={disabled}
-                      onClick={() => handleSelectTeam(game.id, team.full)}
-                      className={`p-2.5 rounded-lg border flex flex-col justify-start transition-all ${btnColor} ${
-                        disabled && !locked ? 'opacity-40 cursor-not-allowed' : locked ? 'cursor-default' : ''
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 w-full">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <img
-                            src={getTeamLogoUrl(team.full)}
-                            alt={team.nick}
-                            className="w-6 h-6 object-contain flex-shrink-0"
-                          />
-                          <div className="flex flex-col items-start truncate">
-                            <span className="text-xs font-semibold truncate">{team.nick}</span>
-                            {!isChaosWeek && (
-                              <span className={`text-[9px] ${isLock ? 'text-amber-400/80' : 'text-gray-400'}`}>
-                                Picked {count}/6
+                          <div className="flex flex-col items-end flex-shrink-0">
+                            {(isFinished || isLive) && team.score !== undefined && team.score !== null ? (
+                              <div className={`px-2 py-0.5 rounded border text-xs font-mono ${scoreBoxStyle}`}>
+                                {team.score}
+                              </div>
+                            ) : (
+                              <span className={`text-[10px] font-mono font-medium ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
+                                {team.record || '0-0'}
                               </span>
                             )}
                           </div>
                         </div>
 
-                        <div className="flex flex-col items-end flex-shrink-0">
-                          {(isFinished || isLive) && team.score !== undefined && team.score !== null ? (
-                            <div className={`px-2 py-0.5 rounded border text-xs font-mono ${scoreBoxStyle}`}>
-                              {team.score}
-                            </div>
-                          ) : (
-                            <span className={`text-[10px] font-mono font-medium ${isLock ? 'text-amber-300/80' : 'text-gray-400'}`}>
-                              {team.record || '0-0'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                        {/* Locked game pickers list (Alphabetical order by first name) */}
+                        {locked && (
+                          <div className="w-full mt-2">
+                            <div className="border-t border-dashed border-gray-700/80 mb-2 w-full" />
+                            {teamPicks.length === 0 ? (
+                              <span className="text-[10px] text-gray-500 italic truncate w-full text-left block">
+                                nobody picked this team
+                              </span>
+                            ) : (
+                              <div className="flex flex-col gap-0.5 w-full text-left">
+                                {teamPicks.map((p) => {
+                                  const firstName = p.profiles?.first_name?.trim();
+                                  const lastInitial = p.profiles?.last_name?.trim()?.slice(0, 1);
 
-                      {/* Locked game pickers list */}
-                      {locked && (
-                        <div className="w-full mt-2">
-                          <div className="border-t border-dashed border-gray-700/80 mb-2 w-full" />
-                          {teamPicks.length === 0 ? (
-                            <span className="text-[10px] text-gray-500 italic truncate w-full text-left block">
-                              nobody picked this team
-                            </span>
-                          ) : (
-                            <div className="flex flex-col gap-0.5 w-full text-left">
-                              {teamPicks.map((p) => {
-                                const firstName = p.profiles?.first_name?.trim();
-                                const lastInitial = p.profiles?.last_name?.trim()?.slice(0, 1);
+                                  const displayName = firstName
+                                    ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}`
+                                    : p.profiles?.team_name || 'Unknown';
 
-                                const displayName = firstName
-                                  ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}`
-                                  : p.profiles?.team_name || 'Unknown';
-
-                                return (
-                                  <div key={p.id} className="flex items-center justify-between text-[10px] text-gray-300 min-w-0">
-                                    <span className="truncate">{displayName}</span>
-                                    {p.is_lock && <span className="text-[9px] flex-shrink-0 ml-1">🔒</span>}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
+                                  return (
+                                    <div key={p.id} className="flex items-center justify-between text-[10px] text-gray-300 min-w-0">
+                                      <span className="truncate">{displayName}</span>
+                                      {p.is_lock && <span className="text-[9px] flex-shrink-0 ml-1">🔒</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
 
       {/* Standard 6-Slot Bottom Widget */}
