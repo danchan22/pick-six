@@ -285,9 +285,6 @@ export default function AdminWeeklyRecapModal({
                 <h2 className="text-xl font-black text-white tracking-tight">
                   Week {selectedWeek} Recap
                 </h2>
-                <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-widest">
-                  PICK SIX LEAGUE
-                </span>
               </div>
             </div>
           </div>
@@ -434,10 +431,10 @@ export default function AdminWeeklyRecapModal({
                               className="w-6 h-6 object-contain"
                             />
                             <div className="flex flex-col">
-                              <span className="font-bold text-white">{displayName}</span>
-                              <span className="text-[10px] text-amber-300 font-semibold">
-                                Lock: {getTeamNickname(pick.selected_team)}
-                              </span>
+                            <span className="font-bold text-white">{user.team_name}</span>
+                            <span className="text-[10px] text-gray-400">
+                              {user.first_name} {user.last_name}
+                            </span>
                             </div>
                           </div>
 
