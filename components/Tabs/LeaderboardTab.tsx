@@ -30,7 +30,7 @@ export default function LeaderboardTab() {
 
     const computed = profiles.map((p) => {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
-      
+
       const totalPoints = userPicks.reduce((acc, curr) => {
         const game = curr.games;
         if (game?.status === 'post') {
@@ -47,8 +47,14 @@ export default function LeaderboardTab() {
       }, 0);
 
       const completedPicks = userPicks.filter((pick) => pick.games?.status === 'post');
-      const wins = completedPicks.filter((pick) => pick.selected_team === pick.games?.winner_team).length;
-      const losses = completedPicks.filter((pick) => pick.selected_team !== pick.games?.winner_team && pick.games?.winner_team !== 'TIE').length;
+      const wins = completedPicks.filter(
+        (pick) => pick.selected_team === pick.games?.winner_team
+      ).length;
+      const losses = completedPicks.filter(
+        (pick) =>
+          pick.selected_team !== pick.games?.winner_team &&
+          pick.games?.winner_team !== 'TIE'
+      ).length;
 
       return {
         ...p,
@@ -58,8 +64,31 @@ export default function LeaderboardTab() {
       };
     });
 
-    computed.sort((a, b) => b.totalPoints - a.totalPoints);
-    setStandings(computed);
+    // Sort by points descending, then tiebreaker by total wins
+    computed.sort((a, b) => b.totalPoints - a.totalPoints || b.wins - a.wins);
+
+    // Calculate tie-aware rankings
+    let currentRank = 1;
+    const rankedStandings = computed.map((user, index, arr) => {
+      if (index > 0) {
+        const prevUser = arr[index - 1];
+        if (user.totalPoints < prevUser.totalPoints) {
+          currentRank = index + 1;
+        }
+      }
+
+      const isFirstOfTie =
+        index === 0 || user.totalPoints !== arr[index - 1].totalPoints;
+
+      return {
+        ...user,
+        rank: currentRank,
+        isFirstOfTie,
+        isFirstPlace: currentRank === 1,
+      };
+    });
+
+    setStandings(rankedStandings);
   };
 
   const fetchMemberPicks = async (userId: string, week: number) => {
@@ -80,7 +109,6 @@ export default function LeaderboardTab() {
       return { ...pick, is_lock: false };
     });
 
-    // Ensure Lock of the Week is always sorted at the bottom
     const standardPicks = sanitizedPicks.filter((p) => !p.is_lock);
     const lockPick = sanitizedPicks.find((p) => p.is_lock);
     const orderedPicks = lockPick ? [...standardPicks, lockPick] : sanitizedPicks;
@@ -88,69 +116,108 @@ export default function LeaderboardTab() {
     setMemberPicks(orderedPicks);
   };
 
+  const highestScore = standings[0]?.totalPoints;
+
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <h2 className="text-xl font-bold flex items-center gap-2">🏆 Standings</h2>
+      <h2 className="text-xl font-bold flex items-center gap-2">👑 Standings</h2>
 
       <div className="flex flex-col gap-2">
         {standings.map((user, index) => {
           const isCurrentUser = user.id === currentUserId;
-          const initials = `${user.first_name?.slice(0, 1) || ''}${user.last_name?.slice(0, 1) || ''}`.toUpperCase() || 'PS';
+          const initials = `${user.first_name?.slice(0, 1) || ''}${
+            user.last_name?.slice(0, 1) || ''
+          }`.toUpperCase() || 'PS';
           const champYear = user.championships ? String(user.championships).trim() : '';
 
+          const isFirstPlace = user.isFirstPlace;
+          const nextUser = standings[index + 1];
+          const showSeparator = isFirstPlace && nextUser && !nextUser.isFirstPlace;
+
+          let cardStyle = 'bg-gray-900 border-gray-800';
+          if (isFirstPlace) {
+            cardStyle =
+              'bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-gray-900 border-amber-500/40 shadow-lg shadow-amber-500/10';
+          }
+          if (isCurrentUser) {
+            cardStyle +=
+              ' border-emerald-500 shadow-lg ring-1 ring-emerald-500 bg-emerald-950/40';
+          }
+
           return (
-            <div
-              key={user.id}
-              onClick={() => setSelectedMember(user)}
-              className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500/50 ${
-                isCurrentUser
-                  ? 'bg-emerald-950/60 border-emerald-500 shadow-lg ring-1 ring-emerald-500'
-                  : 'bg-gray-900 border-gray-800'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="font-extrabold text-sm font-mono w-5 text-gray-400">
-                  {index === 0 ? '👑' : `#${index + 1}`}
-                </span>
+            <div key={user.id} className="flex flex-col gap-2">
+              <div
+                onClick={() => setSelectedMember(user)}
+                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500/50 ${cardStyle}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-extrabold text-sm font-mono w-6 text-center text-gray-400">
+                    {isFirstPlace
+                      ? '👑'
+                      : user.isFirstOfTie
+                      ? `#${user.rank}`
+                      : ''}
+                  </span>
 
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-600 to-indigo-600 border border-emerald-500 flex items-center justify-center font-bold text-xs text-white overflow-hidden">
-                  {user.avatar_url ? (
-                    <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    initials
-                  )}
-                </div>
+                  <div
+                    className={`w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-600 to-indigo-600 border flex items-center justify-center font-bold text-xs text-white overflow-hidden ${
+                      isFirstPlace ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-emerald-500'
+                    }`}
+                  >
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt="Avatar"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      initials
+                    )}
+                  </div>
 
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-bold text-xs text-white">{user.team_name}</p>
-                    {isCurrentUser && (
-                      <span className="text-[9px] bg-emerald-500 text-black px-1.5 py-0.2 rounded font-bold uppercase">
-                        YOU
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-bold text-xs text-white">{user.team_name}</p>
+                      {isCurrentUser && (
+                        <span className="text-[9px] bg-emerald-500 text-black px-1.5 py-0.2 rounded font-bold uppercase">
+                          YOU
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400">
+                      {user.first_name} {user.last_name}
+                    </p>
+
+                    {champYear && (
+                      <span className="text-[10px] font-semibold text-amber-400 flex items-center gap-1 mt-0.5">
+                        <span>🏆</span> {champYear} Champion
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-gray-400">
-                    {user.first_name} {user.last_name}
-                  </p>
+                </div>
 
-                  {/* Gold Champion Line */}
-                  {champYear && (
-                    <span className="text-[10px] font-semibold text-amber-400 flex items-center gap-1 mt-0.5">
-                      <span>🏆</span> {champYear} Champion
-                    </span>
-                  )}
+                <div className="text-right">
+                  <span
+                    className={`font-extrabold text-base font-mono ${
+                      isFirstPlace ? 'text-amber-400' : 'text-emerald-400'
+                    }`}
+                  >
+                    {user.totalPoints} {user.totalPoints === 1 ? 'pt' : 'pts'}
+                  </span>
+                  <p className="text-[10px] text-gray-400 font-mono">
+                    {user.wins}-{user.losses}
+                  </p>
                 </div>
               </div>
 
-              <div className="text-right">
-                <span className="font-extrabold text-base text-emerald-400 font-mono">
-                  {user.totalPoints} {user.totalPoints === 1 ? 'pt' : 'pts'}
-                </span>
-                <p className="text-[10px] text-gray-400 font-mono">
-                  {user.wins}-{user.losses}
-                </p>
-              </div>
+              {/* Gold dotted line separator below 1st place */}
+              {showSeparator && (
+                <div className="my-2 border-b border-dashed border-amber-500/40 relative">
+                  <span className="absolute -top-2.5 right-4 bg-gray-950 px-2 text-[9px] font-bold text-amber-400/80 uppercase tracking-widest">
+                    1ST PLACE
+                  </span>
+                </div>
+              )}
             </div>
           );
         })}
@@ -171,7 +238,8 @@ export default function LeaderboardTab() {
                 {selectedMember.team_name}
               </h3>
               <p className="text-xs text-gray-400">
-                {selectedMember.first_name} {selectedMember.last_name} • {selectedMember.totalPoints} pts
+                {selectedMember.first_name} {selectedMember.last_name} •{' '}
+                {selectedMember.totalPoints} pts
               </p>
             </div>
 
@@ -228,7 +296,9 @@ export default function LeaderboardTab() {
                         key={pick.id}
                         className="bg-gray-800/50 p-2.5 rounded-lg border border-gray-700/50 flex justify-between items-center text-xs"
                       >
-                        <span className="text-gray-400 font-bold">🔒 Hidden Pick (Kickoff Pending)</span>
+                        <span className="text-gray-400 font-bold">
+                          🔒 Hidden Pick (Kickoff Pending)
+                        </span>
                       </div>
                     );
                   }
@@ -236,7 +306,11 @@ export default function LeaderboardTab() {
                   const isFinished = game?.status === 'post';
                   const teamNick = getTeamNickname(pick.selected_team);
                   const isHome = game?.home_team === pick.selected_team;
-                  const opponentName = game ? (isHome ? game.away_team : game.home_team) : null;
+                  const opponentName = game
+                    ? isHome
+                      ? game.away_team
+                      : game.home_team
+                    : null;
                   const oppAbbr = opponentName ? getTeamAbbr(opponentName) : '';
                   const oppPrefix = isHome ? 'vs' : '@';
 
@@ -246,8 +320,7 @@ export default function LeaderboardTab() {
                   let outcome = '';
                   let outcomeBadgeColor = 'text-gray-400';
                   let cardBgBorder = 'bg-gray-800/80 border-gray-700/80';
-                  
-                  // Calculate score points dynamically
+
                   let pts = pick.points_awarded ?? 0;
                   if (isFinished) {
                     const isWin = game.winner_team === pick.selected_team;
@@ -296,7 +369,6 @@ export default function LeaderboardTab() {
 
                   return (
                     <div key={pick.id} className="flex flex-col gap-1">
-                      {/* Gold Section Header right above Lock of the Week */}
                       {pick.is_lock && (
                         <div className="flex items-center gap-1.5 pt-1.5 pb-0.5 px-0.5">
                           <span className="text-[10px] font-extrabold tracking-wider text-amber-400 uppercase flex items-center gap-1">
@@ -325,11 +397,15 @@ export default function LeaderboardTab() {
 
                         <div className="flex items-center gap-3 flex-shrink-0">
                           {isFinished && (
-                            <span className={`font-mono font-bold text-[11px] ${outcomeBadgeColor}`}>
+                            <span
+                              className={`font-mono font-bold text-[11px] ${outcomeBadgeColor}`}
+                            >
                               {outcome} {selectedScore}-{oppScore}
                             </span>
                           )}
-                          <span className={`font-mono font-bold min-w-[24px] text-right ${ptsColor}`}>
+                          <span
+                            className={`font-mono font-bold min-w-[24px] text-right ${ptsColor}`}
+                          >
                             {formattedPts}
                           </span>
                         </div>
