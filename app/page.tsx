@@ -358,8 +358,14 @@ export default function Home() {
               activeTab === 'leaderboard' ? 'text-emerald-400 font-bold' : 'text-gray-400'
             }`}
           >
+            {/* Crown Icon for Standings */}
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 21h8m-4-4v4M6 4h12s1 0 1 1v3c0 3.314-2.686 6-6 6s-6-2.686-6-6V5c0-1 1-1 1-1z" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M3 17l2-10 4 4 3-6 3 6 4-4 2 10H3z"
+              />
             </svg>
             <span className="text-[11px]">Standings</span>
           </button>
