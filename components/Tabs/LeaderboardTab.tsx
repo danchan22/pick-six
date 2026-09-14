@@ -120,7 +120,7 @@ export default function LeaderboardTab() {
 
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <h2 className="text-xl font-bold flex items-center gap-2">👑 Standings</h2>
+      <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
 
       <div className="flex flex-col gap-2">
         {standings.map((user, index) => {
