@@ -22,7 +22,6 @@ export default function AdminWeeklyRecapModal({
 
   const [mostPopularPicks, setMostPopularPicks] = useState<any[]>([]);
   const [upsets, setUpsets] = useState<any[]>([]);
-  const [bustedLocks, setBustedLocks] = useState<any[]>([]);
   const [perfectUsers, setPerfectUsers] = useState<any[]>([]);
   const [topStandings, setTopStandings] = useState<any[]>([]);
 
@@ -61,7 +60,7 @@ export default function AdminWeeklyRecapModal({
 
     const weekPicks = allPicks.filter((p) => p.week === selectedWeek);
 
-    // 1. Most Popular Picks & Upsets Calculation
+    // 1. Most Popular Picks Calculation
     const teamPickCounts: Record<string, number> = {};
     weekPicks.forEach((p) => {
       teamPickCounts[p.selected_team] = (teamPickCounts[p.selected_team] || 0) + 1;
@@ -88,43 +87,43 @@ export default function AdminWeeklyRecapModal({
     teamList.sort((a, b) => b.count - a.count);
     setMostPopularPicks(teamList.slice(0, 3));
 
-    // 2. Upsets This Week (More people picked Team A than Team B, but Team A lost)
+    // 2. Upsets This Week + Busted Locks Integration
     const qualifiedUpsets: any[] = [];
     gamePickStats.forEach(({ game, homeTeam, awayTeam, homePicks, awayPicks }) => {
       if (game.status !== 'post') return;
 
-      if (homePicks > awayPicks && game.winner_team === awayTeam) {
-        qualifiedUpsets.push({
-          team: homeTeam,
-          opponent: awayTeam,
-          count: homePicks,
-          oppCount: awayPicks,
-          game,
+      const evaluateUpset = (pickedTeam: string, oppTeam: string, pCount: number, oCount: number) => {
+        // Find players who picked pickedTeam as their lock and lost
+        const bustedLockPicks = weekPicks.filter(
+          (p) => p.game_id === game.id && p.selected_team === pickedTeam && p.is_lock
+        );
+
+        const bustedNames = bustedLockPicks.map((p) => {
+          const fn = p.profiles?.first_name?.trim();
+          const li = p.profiles?.last_name?.trim()?.slice(0, 1);
+          return fn ? `${fn}${li ? ` ${li}.` : ''}` : p.profiles?.team_name || 'Unknown';
         });
-      } else if (awayPicks > homePicks && game.winner_team === homeTeam) {
-        qualifiedUpsets.push({
-          team: awayTeam,
-          opponent: homeTeam,
-          count: awayPicks,
-          oppCount: homePicks,
-          game,
-        });
-      }
+
+        if (pCount > oCount && game.winner_team === oppTeam) {
+          qualifiedUpsets.push({
+            team: pickedTeam,
+            opponent: oppTeam,
+            count: pCount,
+            oppCount: oCount,
+            game,
+            bustedLockNames: bustedNames,
+          });
+        }
+      };
+
+      evaluateUpset(homeTeam, awayTeam, homePicks, awayPicks);
+      evaluateUpset(awayTeam, homeTeam, awayPicks, homePicks);
     });
 
     qualifiedUpsets.sort((a, b) => b.count - a.count);
     setUpsets(qualifiedUpsets);
 
-    // 3. Locks Busted
-    const bustedLockPicks = weekPicks.filter((p) => {
-      const game = p.games;
-      if (!p.is_lock || !game || game.status !== 'post') return false;
-      return game.winner_team !== p.selected_team && game.winner_team !== 'TIE';
-    });
-
-    setBustedLocks(bustedLockPicks);
-
-    // 4. Perfect Weeks
+    // 3. Perfect Weeks
     const userWeekStats: Record<string, { wins: number; losses: number; total: number }> = {};
     profiles.forEach((p) => {
       userWeekStats[p.id] = { wins: 0, losses: 0, total: 0 };
@@ -150,7 +149,7 @@ export default function AdminWeeklyRecapModal({
     const perfectProfiles = profiles.filter((p) => perfectUserIds.includes(p.id));
     setPerfectUsers(perfectProfiles);
 
-    // 5. Current Standings (Top 3)
+    // 4. Current Standings (Top 3)
     const userScores: Record<string, number> = {};
     const userWins: Record<string, number> = {};
     const userLosses: Record<string, number> = {};
@@ -196,7 +195,6 @@ export default function AdminWeeklyRecapModal({
     try {
       const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
       
-      // Check if Web Share API is available (Mobile photo save/share)
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], `PickSix_Week_${selectedWeek}_Recap.png`, { type: 'image/png' });
 
@@ -206,7 +204,6 @@ export default function AdminWeeklyRecapModal({
           title: `Week ${selectedWeek} Recap`,
         });
       } else {
-        // Fallback for desktop downloads
         const link = document.createElement('a');
         link.download = `PickSix_Week_${selectedWeek}_Recap.png`;
         link.href = dataUrl;
@@ -277,15 +274,18 @@ export default function AdminWeeklyRecapModal({
           ref={cardRef}
           className="bg-gray-950 border border-gray-800 rounded-2xl w-full p-6 relative flex flex-col gap-5 text-white shadow-2xl"
         >
-          {/* Logo Header */}
+          {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-800 pb-3">
             <div className="flex items-center gap-3">
-              <img src="/pick-six-logo.png" alt="Pick Six" className="w-10 h-10 object-contain" />
-              <div>
-                <h2 className="text-xl font-black text-white tracking-tight">
-                  Week {selectedWeek} Recap
-                </h2>
-              </div>
+              <img
+                src="/pick-six-logo.png"
+                alt="Pick Six"
+                crossOrigin="anonymous"
+                className="w-10 h-10 object-contain"
+              />
+              <h2 className="text-xl font-black text-white tracking-tight">
+                Week {selectedWeek} Recap
+              </h2>
             </div>
           </div>
 
@@ -323,6 +323,7 @@ export default function AdminWeeklyRecapModal({
                             <img
                               src={getTeamLogoUrl(item.team)}
                               alt=""
+                              crossOrigin="anonymous"
                               className="w-6 h-6 object-contain flex-shrink-0"
                             />
                             <div className="flex flex-col truncate">
@@ -373,74 +374,41 @@ export default function AdminWeeklyRecapModal({
                       return (
                         <div
                           key={i}
-                          className="bg-red-950/20 border border-red-500/40 rounded-xl p-2.5 flex items-center justify-between text-xs"
+                          className="bg-red-950/20 border border-red-500/40 rounded-xl p-2.5 flex flex-col gap-1.5 text-xs"
                         >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <img
-                              src={getTeamLogoUrl(item.team)}
-                              alt=""
-                              className="w-6 h-6 object-contain flex-shrink-0"
-                            />
-                            <div className="flex flex-col truncate">
-                              <span className="font-bold text-white truncate">
-                                {getTeamNickname(item.team)}{' '}
-                                <span className="text-[11px] font-normal text-gray-400">
-                                  {isHome ? 'vs' : '@'} {getTeamAbbr(item.opponent)}
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img
+                                src={getTeamLogoUrl(item.team)}
+                                alt=""
+                                crossOrigin="anonymous"
+                                className="w-6 h-6 object-contain flex-shrink-0"
+                              />
+                              <div className="flex flex-col truncate">
+                                <span className="font-bold text-white truncate">
+                                  {getTeamNickname(item.team)}{' '}
+                                  <span className="text-[11px] font-normal text-gray-400">
+                                    {isHome ? 'vs' : '@'} {getTeamAbbr(item.opponent)}
+                                  </span>
                                 </span>
-                              </span>
-                              <span className="text-[10px] text-red-400 font-bold">
-                                Picked by {item.count} vs {item.oppCount}
-                              </span>
+                                <span className="text-[10px] text-red-400 font-bold">
+                                  Picked by {item.count} vs {item.oppCount}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="px-2.5 py-0.5 rounded border border-red-500 bg-red-600 text-xs font-mono font-bold text-white shadow">
+                              L {teamScore}-{oppScore}
                             </div>
                           </div>
 
-                          <div className="px-2.5 py-0.5 rounded border border-red-500 bg-red-600 text-xs font-mono font-bold text-white shadow">
-                            L {teamScore}-{oppScore}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Locks Busted */}
-              {bustedLocks.length > 0 && (
-                <div className="flex flex-col gap-2">
-                  <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <span>🔒</span> LOCKS BUSTED
-                  </h3>
-
-                  <div className="flex flex-col gap-1.5">
-                    {bustedLocks.map((pick) => {
-                      const firstName = pick.profiles?.first_name?.trim();
-                      const lastInitial = pick.profiles?.last_name?.trim()?.slice(0, 1);
-                      const displayName = firstName
-                        ? `${firstName}${lastInitial ? ` ${lastInitial}.` : ''}`
-                        : pick.profiles?.team_name || 'Unknown';
-
-                      return (
-                        <div
-                          key={pick.id}
-                          className="bg-gray-900 border border-amber-500/40 p-2.5 rounded-xl flex items-center justify-between text-xs"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <img
-                              src={getTeamLogoUrl(pick.selected_team)}
-                              alt=""
-                              className="w-6 h-6 object-contain"
-                            />
-                            <div className="flex flex-col">
-                            <span className="font-bold text-white">{user.team_name}</span>
-                            <span className="text-[10px] text-gray-400">
-                              {user.first_name} {user.last_name}
-                            </span>
+                          {/* Busted Locks listed directly under Picked by # */}
+                          {item.bustedLockNames && item.bustedLockNames.length > 0 && (
+                            <div className="border-t border-red-500/20 pt-1 text-[10px] text-amber-300 font-medium">
+                              <span className="font-bold text-amber-400">Locks busted: </span>
+                              {item.bustedLockNames.join(', ')}
                             </div>
-                          </div>
-
-                          <span className="text-xs font-mono font-bold text-red-400 bg-red-950/60 border border-red-500/50 px-2 py-0.5 rounded">
-                            -1.0 pt
-                          </span>
+                          )}
                         </div>
                       );
                     })}
