@@ -242,20 +242,24 @@ export default function AdminTab({ currentWeek = 1 }: AdminTabProps) {
 
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold flex items-center gap-2">🛠️ League Admin</h2>
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <h2 className="text-xl font-bold">League Admin</h2>
+
+        {/* Action Buttons on new line */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsAdminRecapOpen(true)}
-            className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
+            className="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 text-xs font-bold py-1.5 px-3 rounded-lg flex items-center transition-colors"
           >
-            <span>📸</span> Weekly Recap
+            Weekly Recap
           </button>
+
           <button
             onClick={handleExportCSV}
-            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition-colors"
+            className="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-xs font-bold text-emerald-400 py-1.5 px-3 rounded-lg flex items-center transition-colors"
           >
-            <span>📥</span> Export CSV
+            Export CSV
           </button>
         </div>
       </div>
