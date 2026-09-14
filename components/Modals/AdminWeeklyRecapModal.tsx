@@ -11,19 +11,17 @@ interface AdminWeeklyRecapModalProps {
   initialWeek?: number;
 }
 
-// Convert image URL to Base64 to bypass CORS canvas export restrictions
-async function getBase64ImageFromUrl(imageUrl: string): Promise<string> {
+// Convert any image URL (local or external) to Base64 via server proxy
+async function fetchAsBase64(url: string): Promise<string> {
+  if (!url) return '';
   try {
-    const res = await fetch(imageUrl, { mode: 'cors' });
-    const blob = await res.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(imageUrl);
-      reader.readAsDataURL(blob);
-    });
+    const fullUrl = url.startsWith('/') ? `${window.location.origin}${url}` : url;
+    const res = await fetch(`/api/proxy-image?url=${encodeURIComponent(fullUrl)}`);
+    if (!res.ok) return url;
+    const data = await res.json();
+    return data.dataUrl || url;
   } catch (e) {
-    return imageUrl;
+    return url;
   }
 }
 
@@ -40,7 +38,7 @@ export default function AdminWeeklyRecapModal({
   const [upsets, setUpsets] = useState<any[]>([]);
   const [perfectUsers, setPerfectUsers] = useState<any[]>([]);
   const [topStandings, setTopStandings] = useState<any[]>([]);
-  const [logoBase64, setLogoBase64] = useState<string>('/pick-six-logo.png');
+  const [logoBase64, setLogoBase64] = useState<string>('');
 
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -58,7 +56,8 @@ export default function AdminWeeklyRecapModal({
     setLoading(true);
 
     // Convert Pick Six logo to base64
-    getBase64ImageFromUrl('/pick-six-logo.png').then((b64) => setLogoBase64(b64));
+    const b64AppLogo = await fetchAsBase64('/pick-six-logo.png');
+    setLogoBase64(b64AppLogo);
 
     const { data: weekGames } = await supabase
       .from('games')
@@ -80,7 +79,7 @@ export default function AdminWeeklyRecapModal({
 
     const weekPicks = allPicks.filter((p) => p.week === selectedWeek);
 
-    // 1. Most Popular Picks Calculation
+    // 1. Most Popular Picks
     const teamPickCounts: Record<string, number> = {};
     weekPicks.forEach((p) => {
       teamPickCounts[p.selected_team] = (teamPickCounts[p.selected_team] || 0) + 1;
@@ -102,8 +101,7 @@ export default function AdminWeeklyRecapModal({
     const teamList = await Promise.all(
       Object.entries(teamPickCounts).map(async ([team, count]) => {
         const game = weekGames.find((g) => g.home_team === team || g.away_team === team);
-        const rawLogo = getTeamLogoUrl(team);
-        const b64Logo = await getBase64ImageFromUrl(rawLogo);
+        const b64Logo = await fetchAsBase64(getTeamLogoUrl(team));
         return { team, count, game, logoUrl: b64Logo };
       })
     );
@@ -133,7 +131,7 @@ export default function AdminWeeklyRecapModal({
         });
 
         if (pCount > oCount && game.winner_team === oppTeam) {
-          const b64Logo = await getBase64ImageFromUrl(getTeamLogoUrl(pickedTeam));
+          const b64Logo = await fetchAsBase64(getTeamLogoUrl(pickedTeam));
           qualifiedUpsets.push({
             team: pickedTeam,
             opponent: oppTeam,
@@ -223,7 +221,10 @@ export default function AdminWeeklyRecapModal({
     setDownloading(true);
 
     try {
+      // Double call to ensure fonts and base64 canvas assets are fully warmed up
+      await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
       const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
+
       const blob = await (await fetch(dataUrl)).blob();
       const file = new File([blob], `PickSix_Week_${selectedWeek}_Recap.png`, { type: 'image/png' });
 
@@ -305,11 +306,13 @@ export default function AdminWeeklyRecapModal({
         >
           {/* Header */}
           <div className="flex items-center gap-3 border-b border-gray-800 pb-3">
-            <img
-              src={logoBase64}
-              alt="Pick Six"
-              className="w-10 h-10 object-contain"
-            />
+            {logoBase64 && (
+              <img
+                src={logoBase64}
+                alt="Pick Six"
+                className="w-10 h-10 object-contain"
+              />
+            )}
             <h2 className="text-xl font-black text-white tracking-tight">
               Week {selectedWeek} Recap
             </h2>
@@ -346,11 +349,13 @@ export default function AdminWeeklyRecapModal({
                           className="bg-gray-900 border border-gray-800 rounded-xl p-2.5 flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <img
-                              src={item.logoUrl}
-                              alt=""
-                              className="w-6 h-6 object-contain flex-shrink-0"
-                            />
+                            {item.logoUrl && (
+                              <img
+                                src={item.logoUrl}
+                                alt=""
+                                className="w-6 h-6 object-contain flex-shrink-0"
+                              />
+                            )}
                             <div className="flex flex-col truncate">
                               <span className="font-bold text-white truncate">
                                 {getTeamNickname(item.team)}{' '}
@@ -403,11 +408,13 @@ export default function AdminWeeklyRecapModal({
                         >
                           <div className="flex items-center justify-between w-full">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <img
-                                src={item.logoUrl}
-                                alt=""
-                                className="w-6 h-6 object-contain flex-shrink-0"
-                              />
+                              {item.logoUrl && (
+                                <img
+                                  src={item.logoUrl}
+                                  alt=""
+                                  className="w-6 h-6 object-contain flex-shrink-0"
+                                />
+                              )}
                               <div className="flex flex-col truncate">
                                 <span className="font-bold text-white truncate">
                                   {getTeamNickname(item.team)}{' '}
@@ -426,7 +433,7 @@ export default function AdminWeeklyRecapModal({
                             </div>
                           </div>
 
-                          {/* Busted Locks separated by bullet • and rendered in white without line splits */}
+                          {/* Busted Locks listed directly under Picked by # */}
                           {item.bustedLockNames && item.bustedLockNames.length > 0 && (
                             <div className="border-t border-red-500/20 pt-1.5 text-[10px] flex items-center flex-wrap gap-x-1 gap-y-0.5">
                               <span className="font-bold text-amber-400">Locks busted:</span>
