@@ -318,7 +318,6 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
               : 'bg-gray-900 border-gray-800 text-gray-400 hover:text-white hover:border-gray-700'
           }`}
         >
-          <span>🎯</span>
           <span>{showOnlyMyPicks ? 'Showing My Picks' : 'Show Only My Picks'}</span>
           {showOnlyMyPicks && (
             <span className="ml-1 text-[10px] bg-emerald-500 text-black px-1.5 rounded-full font-black">
