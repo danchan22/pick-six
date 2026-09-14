@@ -299,7 +299,7 @@ export default function StatsTab() {
               <span>🏆</span> Hall of Perfection
             </h3>
             <p className="text-xs text-gray-400">
-              Members who achieved an unblemished 6-0 (or 16-0) record in a week.
+              Every single pick right for the week!
             </p>
 
             {perfectionData.length === 0 ? (
@@ -344,7 +344,7 @@ export default function StatsTab() {
               <span>💩</span> Hall of Poop
             </h3>
             <p className="text-xs text-gray-400">
-              Members who scored 0 or fewer points in a completed week.
+              0 points or fewer in a week!
             </p>
 
             {shameData.length === 0 ? (
