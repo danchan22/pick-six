@@ -330,7 +330,7 @@ export default function StatsTab() {
                     </div>
 
                     <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/30">
-                      Week {item.week} Perfect
+                      Week {item.week}
                     </span>
                   </div>
                 ))}
