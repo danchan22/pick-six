@@ -268,7 +268,7 @@ export default function Home() {
               onPicksChanged={handlePicksChanged}
             />
           ) : activeTab === 'leaderboard' ? (
-            <LeaderboardTab />
+            <LeaderboardTab currentWeek={currentWeek} />
           ) : activeTab === 'stats' ? (
             <StatsTab />
           ) : activeTab === 'rules' ? (
