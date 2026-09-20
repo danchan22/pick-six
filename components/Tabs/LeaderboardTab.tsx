@@ -186,7 +186,6 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
 
   const handleOpenMemberModal = (user: any) => {
     setSelectedMember(user);
-    // Ensure the modal defaults to the current week when tapping a card
     setViewWeek(currentWeek || 1);
   };
 
@@ -278,7 +277,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
                     Overall: {user.wins}-{user.losses}
                   </p>
                   <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    Week {currentWeek}: {user.weekWins}-{user.weekLosses}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
+                    Wk {currentWeek}: {user.weekWins}-{user.weekLosses}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
                   </p>
                 </div>
               </div>
