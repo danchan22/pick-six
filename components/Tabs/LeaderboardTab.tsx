@@ -34,19 +34,28 @@ if (typeof document !== 'undefined' && !document.getElementById('gold-shimmer-st
   document.head.appendChild(styleEl);
 }
 
-export default function LeaderboardTab() {
+interface LeaderboardTabProps {
+  currentWeek?: number;
+}
+
+export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps) {
   const [standings, setStandings] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [memberPicks, setMemberPicks] = useState<any[]>([]);
-  const [viewWeek, setViewWeek] = useState<number>(1);
+  const [viewWeek, setViewWeek] = useState<number>(currentWeek);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setCurrentUserId(data.user.id);
     });
-    fetchLeaderboard();
   }, []);
+
+  // Fetch leaderboard data when currentWeek changes
+  useEffect(() => {
+    fetchLeaderboard();
+    setViewWeek(currentWeek);
+  }, [currentWeek]);
 
   useEffect(() => {
     if (selectedMember) fetchMemberPicks(selectedMember.id, viewWeek);
@@ -61,6 +70,7 @@ export default function LeaderboardTab() {
     const computed = profiles.map((p) => {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
 
+      // --- Overall Calculations ---
       const totalPoints = userPicks.reduce((acc, curr) => {
         const game = curr.games;
         if (game?.status === 'post') {
@@ -86,11 +96,41 @@ export default function LeaderboardTab() {
           pick.games?.winner_team !== 'TIE'
       ).length;
 
+      // --- Current Week Calculations ---
+      const weekPicks = userPicks.filter((pick) => pick.week === currentWeek);
+      const weekPoints = weekPicks.reduce((acc, curr) => {
+        const game = curr.games;
+        if (game?.status === 'post') {
+          const isWin = curr.selected_team === game.winner_team;
+          if (curr.is_lock) {
+            return acc + (isWin ? 2.0 : -1.0);
+          } else {
+            if (isWin) return acc + 1.0;
+            if (game.winner_team === 'TIE') return acc + 0.5;
+            return acc;
+          }
+        }
+        return acc + (curr.points_awarded || 0);
+      }, 0);
+
+      const weekCompletedPicks = weekPicks.filter((pick) => pick.games?.status === 'post');
+      const weekWins = weekCompletedPicks.filter(
+        (pick) => pick.selected_team === pick.games?.winner_team
+      ).length;
+      const weekLosses = weekCompletedPicks.filter(
+        (pick) =>
+          pick.selected_team !== pick.games?.winner_team &&
+          pick.games?.winner_team !== 'TIE'
+      ).length;
+
       return {
         ...p,
         totalPoints,
         wins,
         losses,
+        weekPoints,
+        weekWins,
+        weekLosses,
       };
     });
 
@@ -144,6 +184,12 @@ export default function LeaderboardTab() {
     setMemberPicks(orderedPicks);
   };
 
+  const handleOpenMemberModal = (user: any) => {
+    setSelectedMember(user);
+    // Ensure the modal defaults to the current week when tapping a card
+    setViewWeek(currentWeek || 1);
+  };
+
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
       <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
@@ -171,7 +217,7 @@ export default function LeaderboardTab() {
           return (
             <div key={user.id} className="flex flex-col gap-2">
               <div
-                onClick={() => setSelectedMember(user)}
+                onClick={() => handleOpenMemberModal(user)}
                 className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all hover:border-emerald-500/50 ${cardStyle}`}
               >
                 <div className="flex items-center gap-3">
@@ -220,16 +266,19 @@ export default function LeaderboardTab() {
                   </div>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right flex flex-col items-end">
                   <span
-                    className={`font-extrabold text-base font-mono ${
+                    className={`font-extrabold text-base font-mono leading-none ${
                       isFirstPlace ? 'text-amber-400' : 'text-emerald-400'
                     }`}
                   >
                     {user.totalPoints} {user.totalPoints === 1 ? 'pt' : 'pts'}
                   </span>
-                  <p className="text-[10px] text-gray-400 font-mono">
-                    {user.wins}-{user.losses}
+                  <p className="text-[11px] text-gray-200 font-mono mt-1">
+                    Overall: {user.wins}-{user.losses}
+                  </p>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                    Week {currentWeek}: {user.weekWins}-{user.weekLosses}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
                   </p>
                 </div>
               </div>
