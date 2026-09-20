@@ -518,6 +518,11 @@ export default function PicksTab({ userId, currentWeek, onPicksChanged }: PicksT
                                     </div>
                                   );
                                 })}
+
+                                <div className="border-t border-dashed border-gray-700/80 my-1.5 w-full" />
+                                <span className="text-[10px] text-gray-400 font-normal">
+                                  picked by <span className="font-bold text-white">{teamPicks.length}</span> {teamPicks.length === 1 ? 'person' : 'people'}
+                                </span>
                               </div>
                             )}
                           </div>
