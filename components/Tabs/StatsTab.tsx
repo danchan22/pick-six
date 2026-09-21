@@ -37,6 +37,8 @@ interface WeekStat {
   leagueWins: number;
   leagueLosses: number;
   winPctStr: string;
+  lockWins: number;
+  lockLosses: number;
   bestUsers: BestUser[];
   hasCompletedGames: boolean;
 }
@@ -182,6 +184,8 @@ export default function StatsTab() {
           leagueWins: 0,
           leagueLosses: 0,
           winPctStr: '.000',
+          lockWins: 0,
+          lockLosses: 0,
           bestUsers: [],
           hasCompletedGames: false,
         });
@@ -192,6 +196,8 @@ export default function StatsTab() {
       let leagueLosses = 0;
       let leagueTies = 0;
       let leaguePoints = 0;
+      let lockWins = 0;
+      let lockLosses = 0;
 
       const userStatsMap: Record<string, { wins: number; losses: number; points: number; profile: any }> = {};
 
@@ -204,6 +210,8 @@ export default function StatsTab() {
           pts = isWin ? 1 : isTie ? 0.5 : 0;
         } else if (p.is_lock) {
           pts = isWin ? 2 : -1;
+          if (isWin) lockWins += 1;
+          else if (!isTie) lockLosses += 1;
         } else {
           pts = isWin ? 1 : isTie ? 0.5 : 0;
         }
@@ -257,6 +265,8 @@ export default function StatsTab() {
         leagueWins,
         leagueLosses,
         winPctStr,
+        lockWins,
+        lockLosses,
         bestUsers,
         hasCompletedGames: true,
       });
@@ -524,10 +534,16 @@ export default function StatsTab() {
                 <div className="flex justify-between items-start">
                   <div>
                     {/* W-L (.###) as the top line */}
-                    <h4 className="font-bold text-base font-mono text-white">
+                    <h4 className="font-bold text-xs font-mono text-white">
                       {wItem.leagueWins}-{wItem.leagueLosses}{' '}
                       <span className="text-gray-400 font-normal">({wItem.winPctStr})</span>
                     </h4>
+                    {/* Smaller Locks line below */}
+                    {wItem.week !== 18 && (
+                      <p className="text-[10px] font-mono text-gray-400 mt-0.5">
+                        Locks: <span className="text-gray-200 font-medium">{wItem.lockWins}-{wItem.lockLosses}</span>
+                      </p>
+                    )}
                   </div>
                   <div className="text-right">
                     <span className="font-extrabold text-base font-mono text-emerald-400">
