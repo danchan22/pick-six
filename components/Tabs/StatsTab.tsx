@@ -511,9 +511,7 @@ export default function StatsTab() {
               className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex gap-3 items-start shadow-md"
             >
               {/* Standings-style week number on left without # */}
-              <span className="font-extrabold text-sm font-mono w-6 text-center text-gray-400 pt-0.5">
-                {wItem.week}
-              </span>
+
 
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex justify-between items-start">
