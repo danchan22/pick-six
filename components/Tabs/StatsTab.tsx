@@ -24,11 +24,29 @@ interface TeamStat {
   maxed: number;
 }
 
+interface BestUser {
+  name: string;
+  wins: number;
+  losses: number;
+  points: number;
+}
+
+interface WeekStat {
+  week: number;
+  leaguePoints: number;
+  leagueWins: number;
+  leagueLosses: number;
+  winPctStr: string;
+  bestUsers: BestUser[];
+  hasCompletedGames: boolean;
+}
+
 export default function StatsTab() {
-  const [subTab, setSubTab] = useState<'perfection' | 'popular' | 'history'>('popular');
+  const [subTab, setSubTab] = useState<'perfection' | 'weeks' | 'popular' | 'history'>('popular');
   const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
   const [perfectionData, setPerfectionData] = useState<any[]>([]);
   const [shameData, setShameData] = useState<any[]>([]);
+  const [weeksData, setWeeksData] = useState<WeekStat[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Sorting state for Popular subtab
@@ -151,6 +169,99 @@ export default function StatsTab() {
     setPerfectionData(perfList.sort((a, b) => a.week - b.week));
     setShameData(zeroList.sort((a, b) => a.week - b.week));
 
+    // 3. Weeks Calculations (Weeks 1 to 18)
+    const weeksList: WeekStat[] = [];
+
+    for (let wk = 1; wk <= 18; wk++) {
+      const wkPicks = completedPicks.filter((p) => p.week === wk);
+
+      if (wkPicks.length === 0) {
+        weeksList.push({
+          week: wk,
+          leaguePoints: 0,
+          leagueWins: 0,
+          leagueLosses: 0,
+          winPctStr: '.000',
+          bestUsers: [],
+          hasCompletedGames: false,
+        });
+        continue;
+      }
+
+      let leagueWins = 0;
+      let leagueLosses = 0;
+      let leagueTies = 0;
+      let leaguePoints = 0;
+
+      const userStatsMap: Record<string, { wins: number; losses: number; points: number; profile: any }> = {};
+
+      wkPicks.forEach((p) => {
+        const isWin = p.selected_team === p.games?.winner_team;
+        const isTie = p.games?.winner_team === 'TIE';
+
+        let pts = 0;
+        if (wk === 18) {
+          pts = isWin ? 1 : isTie ? 0.5 : 0;
+        } else if (p.is_lock) {
+          pts = isWin ? 2 : -1;
+        } else {
+          pts = isWin ? 1 : isTie ? 0.5 : 0;
+        }
+
+        leaguePoints += pts;
+
+        if (isWin) leagueWins += 1;
+        else if (isTie) leagueTies += 1;
+        else leagueLosses += 1;
+
+        if (!userStatsMap[p.user_id]) {
+          userStatsMap[p.user_id] = { wins: 0, losses: 0, points: 0, profile: p.profiles };
+        }
+
+        if (isWin) {
+          userStatsMap[p.user_id].wins += 1;
+        } else if (!isTie) {
+          userStatsMap[p.user_id].losses += 1;
+        }
+        userStatsMap[p.user_id].points += pts;
+      });
+
+      const totalGames = leagueWins + leagueLosses + leagueTies;
+      const winPct = totalGames > 0 ? (leagueWins + 0.5 * leagueTies) / totalGames : 0;
+      const winPctStr = winPct === 1 ? '1.000' : winPct.toFixed(3).replace(/^0/, '');
+
+      const userList = Object.values(userStatsMap);
+      let bestUsers: BestUser[] = [];
+
+      if (userList.length > 0) {
+        const maxPts = Math.max(...userList.map((u) => u.points));
+        const topUsers = userList.filter((u) => u.points === maxPts);
+
+        bestUsers = topUsers.map((u) => {
+          const fn = u.profile?.first_name?.trim() || '';
+          const li = u.profile?.last_name?.trim()?.slice(0, 1) || '';
+          const name = fn ? `${fn}${li ? ` ${li}.` : ''}` : (u.profile?.team_name || 'Unknown');
+          return {
+            name,
+            wins: u.wins,
+            losses: u.losses,
+            points: u.points,
+          };
+        });
+      }
+
+      weeksList.push({
+        week: wk,
+        leaguePoints,
+        leagueWins,
+        leagueLosses,
+        winPctStr,
+        bestUsers,
+        hasCompletedGames: true,
+      });
+    }
+
+    setWeeksData(weeksList);
     setLoading(false);
   };
 
@@ -185,18 +296,26 @@ export default function StatsTab() {
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
       {/* Subtab Navigator */}
-      <div className="flex justify-center gap-2 bg-gray-900 p-1.5 rounded-xl border border-gray-800">
+      <div className="flex justify-center gap-1.5 bg-gray-900 p-1.5 rounded-xl border border-gray-800">
         <button
           onClick={() => setSubTab('perfection')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
             subTab === 'perfection' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
           Perfection
         </button>
         <button
+          onClick={() => setSubTab('weeks')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+            subTab === 'weeks' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Weeks
+        </button>
+        <button
           onClick={() => setSubTab('popular')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
             subTab === 'popular' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -204,7 +323,7 @@ export default function StatsTab() {
         </button>
         <button
           onClick={() => setSubTab('history')}
-          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
             subTab === 'history' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -383,8 +502,64 @@ export default function StatsTab() {
             )}
           </div>
         </div>
+      ) : subTab === 'weeks' ? (
+        /* Subtab 2: Weeks */
+        <div className="flex flex-col gap-2.5">
+          {weeksData.map((wItem) => (
+            <div
+              key={wItem.week}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex gap-3 items-start shadow-md"
+            >
+              {/* Standings-style week number on left without # */}
+              <span className="font-extrabold text-sm font-mono w-6 text-center text-gray-400 pt-0.5">
+                {wItem.week}
+              </span>
+
+              <div className="flex-1 flex flex-col gap-2 min-w-0">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h4 className="font-bold text-xs text-white">Week {wItem.week}</h4>
+                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">
+                      League record: <span className="text-gray-200 font-bold">{wItem.leagueWins}-{wItem.leagueLosses}</span>{' '}
+                      <span className="text-gray-400">({wItem.winPctStr})</span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-extrabold text-base font-mono text-emerald-400">
+                      {wItem.leaguePoints} {wItem.leaguePoints === 1 ? 'pt' : 'pts'}
+                    </span>
+                    <span className="block text-[10px] text-gray-400 font-bold tracking-wider">
+                      League points
+                    </span>
+                  </div>
+                </div>
+
+                {/* Best record section */}
+                {wItem.bestUsers.length > 0 && (
+                  <div className="border-t border-gray-800/80 pt-2 flex flex-col gap-1">
+                    <span className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">
+                      Best record:
+                    </span>
+                    <div className="flex flex-col gap-1">
+                      {wItem.bestUsers.map((bUser, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="font-bold text-white">
+                            {bUser.name}
+                          </span>
+                          <span className="font-mono text-[11px] text-gray-300">
+                            {bUser.wins}-{bUser.losses}, <span className="text-emerald-400 font-bold">{bUser.points} {bUser.points === 1 ? 'pt' : 'pts'}</span>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
-        /* Subtab 3: History */
+        /* Subtab 4: History */
         <div className="flex flex-col gap-3">
           <p className="text-xs text-gray-400">Celebrate our league&apos;s past champions.</p>
 
