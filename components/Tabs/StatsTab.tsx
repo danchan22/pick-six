@@ -520,7 +520,7 @@ export default function StatsTab() {
                   <div>
                     <h4 className="font-bold text-xs text-white">Week {wItem.week}</h4>
                     <p className="text-[11px] text-gray-400 font-mono mt-0.5">
-                      League record: <span className="text-gray-200 font-bold">{wItem.leagueWins}-{wItem.leagueLosses}</span>{' '}
+                      League: <span className="text-gray-200 font-bold">{wItem.leagueWins}-{wItem.leagueLosses}</span>{' '}
                       <span className="text-gray-400">({wItem.winPctStr})</span>
                     </p>
                   </div>
@@ -528,9 +528,7 @@ export default function StatsTab() {
                     <span className="font-extrabold text-base font-mono text-emerald-400">
                       {wItem.leaguePoints} {wItem.leaguePoints === 1 ? 'pt' : 'pts'}
                     </span>
-                    <span className="block text-[10px] text-gray-400 font-bold tracking-wider">
-                      League points
-                    </span>
+          
                   </div>
                 </div>
 
