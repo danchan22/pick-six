@@ -524,7 +524,7 @@ export default function StatsTab() {
                 <div className="flex justify-between items-start">
                   <div>
                     {/* W-L (.###) as the top line */}
-                    <h4 className="font-bold text-xs font-mono text-white">
+                    <h4 className="font-bold text-base font-mono text-white">
                       {wItem.leagueWins}-{wItem.leagueLosses}{' '}
                       <span className="text-gray-400 font-normal">({wItem.winPctStr})</span>
                     </h4>
