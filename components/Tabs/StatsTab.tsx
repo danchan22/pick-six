@@ -239,8 +239,9 @@ export default function StatsTab() {
 
         bestUsers = topUsers.map((u) => {
           const fn = u.profile?.first_name?.trim() || '';
-          const li = u.profile?.last_name?.trim()?.slice(0, 1) || '';
-          const name = fn ? `${fn}${li ? ` ${li}.` : ''}` : (u.profile?.team_name || 'Unknown');
+          const ln = u.profile?.last_name?.trim() || '';
+          const fullName = `${fn} ${ln}`.trim();
+          const name = fullName || (u.profile?.team_name || 'Unknown');
           return {
             name,
             wins: u.wins,
@@ -505,28 +506,33 @@ export default function StatsTab() {
       ) : subTab === 'weeks' ? (
         /* Subtab 2: Weeks */
         <div className="flex flex-col gap-2.5">
+          <p className="text-xs text-gray-400 px-1 font-medium">
+            League performance each week
+          </p>
+
           {weeksData.map((wItem) => (
             <div
               key={wItem.week}
               className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex gap-3 items-start shadow-md"
             >
-              {/* Standings-style week number on left without # */}
-
+              {/* Week number on left */}
+              <span className="font-extrabold text-sm font-mono w-6 text-center text-gray-400 pt-0.5">
+                {wItem.week}
+              </span>
 
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-bold text-xs text-white">Week {wItem.week}</h4>
-                    <p className="text-[11px] text-gray-400 font-mono mt-0.5">
-                      League: <span className="text-gray-200 font-bold">{wItem.leagueWins}-{wItem.leagueLosses}</span>{' '}
-                      <span className="text-gray-400">({wItem.winPctStr})</span>
-                    </p>
+                    {/* W-L (.###) as the top line */}
+                    <h4 className="font-bold text-xs font-mono text-white">
+                      {wItem.leagueWins}-{wItem.leagueLosses}{' '}
+                      <span className="text-gray-400 font-normal">({wItem.winPctStr})</span>
+                    </h4>
                   </div>
                   <div className="text-right">
                     <span className="font-extrabold text-base font-mono text-emerald-400">
                       {wItem.leaguePoints} {wItem.leaguePoints === 1 ? 'pt' : 'pts'}
                     </span>
-          
                   </div>
                 </div>
 
@@ -539,11 +545,14 @@ export default function StatsTab() {
                     <div className="flex flex-col gap-1">
                       {wItem.bestUsers.map((bUser, idx) => (
                         <div key={idx} className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-white">
+                          <span className="font-bold text-white truncate pr-2">
                             {bUser.name}
                           </span>
-                          <span className="font-mono text-[11px] text-gray-300">
-                            {bUser.wins}-{bUser.losses}, <span className="text-emerald-400 font-bold">{bUser.points} {bUser.points === 1 ? 'pt' : 'pts'}</span>
+                          <span className="font-mono text-[11px] text-gray-300 flex-shrink-0">
+                            {bUser.wins}-{bUser.losses},{' '}
+                            <span className="text-emerald-400 font-bold">
+                              {bUser.points} {bUser.points === 1 ? 'pt' : 'pts'}
+                            </span>
                           </span>
                         </div>
                       ))}
