@@ -36,7 +36,7 @@ export default function AdminWeeklyRecapModal({
 
   const [mostPopularPicks, setMostPopularPicks] = useState<any[]>([]);
   const [upsets, setUpsets] = useState<any[]>([]);
-  const [perfectUsers, setPerfectUsers] = useState<any[]>([]);
+  const [bestUsers, setBestUsers] = useState<any[]>([]);
   const [topStandings, setTopStandings] = useState<any[]>([]);
   const [logoBase64, setLogoBase64] = useState<string>('');
 
@@ -151,31 +151,51 @@ export default function AdminWeeklyRecapModal({
     qualifiedUpsets.sort((a, b) => b.count - a.count);
     setUpsets(qualifiedUpsets);
 
-    // 3. Perfect Weeks
-    const userWeekStats: Record<string, { wins: number; losses: number; total: number }> = {};
+    // 3. Best Record Calculation for Selected Week
+    const userWeekPerformance: Record<string, { wins: number; losses: number; points: number; profile: any }> = {};
+
     profiles.forEach((p) => {
-      userWeekStats[p.id] = { wins: 0, losses: 0, total: 0 };
+      userWeekPerformance[p.id] = { wins: 0, losses: 0, points: 0, profile: p };
     });
 
     weekPicks.forEach((p) => {
       if (p.games?.status === 'post') {
         const isWin = p.selected_team === p.games.winner_team;
-        if (!userWeekStats[p.user_id]) {
-          userWeekStats[p.user_id] = { wins: 0, losses: 0, total: 0 };
+        const isTie = p.games.winner_team === 'TIE';
+
+        if (!userWeekPerformance[p.user_id]) {
+          const profileMatch = profiles.find((prof) => prof.id === p.user_id);
+          userWeekPerformance[p.user_id] = { wins: 0, losses: 0, points: 0, profile: profileMatch || p.profiles };
         }
-        userWeekStats[p.user_id].total += 1;
-        if (isWin) userWeekStats[p.user_id].wins += 1;
-        else userWeekStats[p.user_id].losses += 1;
+
+        let pts = 0;
+        if (selectedWeek === 18) {
+          pts = isWin ? 1 : isTie ? 0.5 : 0;
+        } else if (p.is_lock) {
+          pts = isWin ? 2 : -1;
+        } else {
+          pts = isWin ? 1 : isTie ? 0.5 : 0;
+        }
+
+        userWeekPerformance[p.user_id].points += pts;
+
+        if (isWin) {
+          userWeekPerformance[p.user_id].wins += 1;
+        } else if (!isTie) {
+          userWeekPerformance[p.user_id].losses += 1;
+        }
       }
     });
 
-    const targetPicksCount = selectedWeek === 18 ? 16 : 6;
-    const perfectUserIds = Object.entries(userWeekStats)
-      .filter(([_, stats]) => stats.wins >= targetPicksCount && stats.losses === 0)
-      .map(([uid]) => uid);
+    const performanceList = Object.values(userWeekPerformance).filter((u) => u.wins > 0 || u.losses > 0 || u.points !== 0);
 
-    const perfectProfiles = profiles.filter((p) => perfectUserIds.includes(p.id));
-    setPerfectUsers(perfectProfiles);
+    if (performanceList.length > 0) {
+      const maxPts = Math.max(...performanceList.map((u) => u.points));
+      const winners = performanceList.filter((u) => u.points === maxPts);
+      setBestUsers(winners);
+    } else {
+      setBestUsers([]);
+    }
 
     // 4. Current Standings (Top 3)
     const userScores: Record<string, number> = {};
@@ -221,7 +241,6 @@ export default function AdminWeeklyRecapModal({
     setDownloading(true);
 
     try {
-      // Double call to ensure fonts and base64 canvas assets are fully warmed up
       await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
       const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
 
@@ -433,7 +452,6 @@ export default function AdminWeeklyRecapModal({
                             </div>
                           </div>
 
-                          {/* Busted Locks listed directly under Picked by # */}
                           {item.bustedLockNames && item.bustedLockNames.length > 0 && (
                             <div className="border-t border-red-500/20 pt-1.5 text-[10px] flex items-center flex-wrap gap-x-1 gap-y-0.5">
                               <span className="font-bold text-amber-400">Locks busted:</span>
@@ -454,26 +472,40 @@ export default function AdminWeeklyRecapModal({
                 </div>
               )}
 
-              {/* Perfect Weeks */}
+              {/* Best Record */}
               <div className="flex flex-col gap-2">
                 <h3 className="text-xs font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span>⭐</span> PERFECT WEEKS
+                  <span>🥇</span> BEST RECORD
                 </h3>
 
-                <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-wrap gap-2 items-center">
-                  {perfectUsers.length === 0 ? (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-1.5">
+                  {bestUsers.length === 0 ? (
                     <span className="text-xs text-gray-500 italic">
-                      No perfect weeks recorded for Week {selectedWeek}.
+                      No game results recorded for Week {selectedWeek}.
                     </span>
                   ) : (
-                    perfectUsers.map((u) => (
-                      <span
-                        key={u.id}
-                        className="bg-amber-500/10 border border-amber-500/40 text-amber-300 px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1"
-                      >
-                        👑 {u.team_name}
-                      </span>
-                    ))
+                    bestUsers.map((u, i) => {
+                      const fn = u.profile?.first_name?.trim() || '';
+                      const ln = u.profile?.last_name?.trim() || '';
+                      const displayName = `${fn} ${ln}`.trim() || u.profile?.team_name || 'Unknown';
+
+                      return (
+                        <div
+                          key={i}
+                          className="flex justify-between items-center text-xs"
+                        >
+                          <span className="font-bold text-white flex items-center gap-1.5 truncate pr-2">
+                            <span>👑</span> {displayName}
+                          </span>
+                          <span className="font-mono text-[11px] text-gray-300 flex-shrink-0">
+                            {u.wins}-{u.losses},{' '}
+                            <span className="text-emerald-400 font-bold">
+                              {u.points} {u.points === 1 ? 'pt' : 'pts'}
+                            </span>
+                          </span>
+                        </div>
+                      );
+                    })
                   )}
                 </div>
               </div>
