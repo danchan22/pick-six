@@ -39,7 +39,8 @@ interface LeaderboardTabProps {
 }
 
 export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps) {
-  const [standings, setStandings] = useState<any[]>([]);
+  const [activeStandings, setActiveStandings] = useState<any[]>([]);
+  const [memorialMember, setMemorialMember] = useState<any | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [memberPicks, setMemberPicks] = useState<any[]>([]);
@@ -134,10 +135,26 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
       };
     });
 
-    computed.sort((a, b) => b.totalPoints - a.totalPoints || b.wins - a.wins);
+    // Check for Philly Rick / Rick Chancellor memorial card
+    const memorial = computed.find(
+      (p) =>
+        p.team_name?.toLowerCase().includes('philly rick') ||
+        (p.first_name?.toLowerCase() === 'rick' && p.last_name?.toLowerCase() === 'chancellor')
+    );
+    
+    setMemorialMember(memorial || null);
+
+    // Active profiles (excluding Philly Rick)
+    const activeProfiles = computed.filter(
+      (p) =>
+        !p.team_name?.toLowerCase().includes('philly rick') &&
+        !(p.first_name?.toLowerCase() === 'rick' && p.last_name?.toLowerCase() === 'chancellor')
+    );
+
+    activeProfiles.sort((a, b) => b.totalPoints - a.totalPoints || b.wins - a.wins);
 
     let currentRank = 1;
-    const rankedStandings = computed.map((user, index, arr) => {
+    const rankedStandings = activeProfiles.map((user, index, arr) => {
       if (index > 0) {
         const prevUser = arr[index - 1];
         if (user.totalPoints < prevUser.totalPoints) {
@@ -156,7 +173,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
       };
     });
 
-    setStandings(rankedStandings);
+    setActiveStandings(rankedStandings);
   };
 
   const fetchMemberPicks = async (userId: string, week: number) => {
@@ -194,7 +211,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
       <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
 
       <div className="flex flex-col gap-2">
-        {standings.map((user, index) => {
+        {activeStandings.map((user, index) => {
           const isCurrentUser = user.id === currentUserId;
           const initials = `${user.first_name?.slice(0, 1) || ''}${
             user.last_name?.slice(0, 1) || ''
@@ -202,7 +219,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
           const champYear = user.championships ? String(user.championships).trim() : '';
 
           const isFirstPlace = user.isFirstPlace;
-          const nextUser = standings[index + 1];
+          const nextUser = activeStandings[index + 1];
           const showSeparator = isFirstPlace && nextUser && !nextUser.isFirstPlace;
 
           let cardStyle = 'bg-gray-900 border-gray-800';
@@ -293,6 +310,61 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
             </div>
           );
         })}
+
+        {/* Memorial Card for Philly Rick */}
+        {memorialMember && (
+          <div className="flex flex-col gap-2 mt-3">
+            <div className="border-b border-dashed border-gray-700/80 my-1 relative" />
+
+            <div
+              onClick={() => handleOpenMemberModal(memorialMember)}
+              className="p-3 rounded-xl border border-gray-800 bg-gray-900/80 flex items-center justify-between cursor-pointer transition-all hover:border-gray-700"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm w-6 text-center text-red-400">
+                  ❤️
+                </span>
+
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-600 to-indigo-600 border border-emerald-500 flex items-center justify-center font-bold text-xs text-white overflow-hidden">
+                  {memorialMember.avatar_url ? (
+                    <img
+                      src={memorialMember.avatar_url}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    'PR'
+                  )}
+                </div>
+
+                <div>
+                  <p className="font-bold text-xs text-white">{memorialMember.team_name}</p>
+                  <p className="text-[11px] text-gray-400">
+                    {memorialMember.first_name} {memorialMember.last_name}
+                  </p>
+
+                  {memorialMember.championships && (
+                    <span className="text-[10px] font-semibold text-amber-400 flex items-center gap-1 mt-0.5">
+                      <span>🏆</span> {String(memorialMember.championships).trim()} Champion
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-right flex flex-col items-end">
+                <span className="font-extrabold text-base font-mono leading-none text-emerald-400">
+                  {memorialMember.totalPoints} {memorialMember.totalPoints === 1 ? 'pt' : 'pts'}
+                </span>
+                <p className="text-[11px] text-gray-200 font-mono mt-1">
+                  Overall: {memorialMember.wins}-{memorialMember.losses}
+                </p>
+                <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                  Wk {currentWeek}: {memorialMember.weekWins}-{memorialMember.weekLosses}, {memorialMember.weekPoints} {memorialMember.weekPoints === 1 ? 'pt' : 'pts'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedMember && (
