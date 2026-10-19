@@ -38,6 +38,14 @@ interface LeaderboardTabProps {
   currentWeek?: number;
 }
 
+// Helper to format records cleanly as W-L or W-L-T if ties exist
+function formatRecord(wins: number, losses: number, ties: number = 0): string {
+  if (ties > 0) {
+    return `${wins}-${losses}-${ties}`;
+  }
+  return `${wins}-${losses}`;
+}
+
 export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps) {
   const [activeStandings, setActiveStandings] = useState<any[]>([]);
   const [memorialMember, setMemorialMember] = useState<any | null>(null);
@@ -88,10 +96,30 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
       }, 0);
 
       const completedPicks = userPicks.filter((pick) => pick.games?.status === 'post');
+
       const wins = completedPicks.filter(
         (pick) => pick.selected_team === pick.games?.winner_team
       ).length;
+
+      const ties = completedPicks.filter(
+        (pick) => pick.games?.winner_team === 'TIE'
+      ).length;
+
       const losses = completedPicks.filter(
+        (pick) =>
+          pick.selected_team !== pick.games?.winner_team &&
+          pick.games?.winner_team !== 'TIE'
+      ).length;
+
+      // --- Locks Calculations ---
+      const lockPicks = completedPicks.filter((pick) => pick.is_lock);
+      const lockWins = lockPicks.filter(
+        (pick) => pick.selected_team === pick.games?.winner_team
+      ).length;
+      const lockTies = lockPicks.filter(
+        (pick) => pick.games?.winner_team === 'TIE'
+      ).length;
+      const lockLosses = lockPicks.filter(
         (pick) =>
           pick.selected_team !== pick.games?.winner_team &&
           pick.games?.winner_team !== 'TIE'
@@ -118,6 +146,9 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
       const weekWins = weekCompletedPicks.filter(
         (pick) => pick.selected_team === pick.games?.winner_team
       ).length;
+      const weekTies = weekCompletedPicks.filter(
+        (pick) => pick.games?.winner_team === 'TIE'
+      ).length;
       const weekLosses = weekCompletedPicks.filter(
         (pick) =>
           pick.selected_team !== pick.games?.winner_team &&
@@ -129,9 +160,14 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
         totalPoints,
         wins,
         losses,
+        ties,
+        lockWins,
+        lockLosses,
+        lockTies,
         weekPoints,
         weekWins,
         weekLosses,
+        weekTies,
       };
     });
 
@@ -141,7 +177,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
         p.team_name?.toLowerCase().includes('philly rick') ||
         (p.first_name?.toLowerCase() === 'rick' && p.last_name?.toLowerCase() === 'chancellor')
     );
-    
+
     setMemorialMember(memorial || null);
 
     // Active profiles (excluding Philly Rick)
@@ -290,11 +326,17 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
                   >
                     {user.totalPoints} {user.totalPoints === 1 ? 'pt' : 'pts'}
                   </span>
+
                   <p className="text-[11px] text-gray-200 font-mono mt-1">
-                    Overall: {user.wins}-{user.losses}
+                    Overall: {formatRecord(user.wins, user.losses, user.ties)}
                   </p>
+
+                  <p className="text-[11px] text-gray-200 font-mono mt-0.5">
+                    Locks: {formatRecord(user.lockWins, user.lockLosses, user.lockTies)}
+                  </p>
+
                   <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    Wk {currentWeek}: {user.weekWins}-{user.weekLosses}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
+                    Wk {currentWeek}: {formatRecord(user.weekWins, user.weekLosses, user.weekTies)}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
                   </p>
                 </div>
               </div>
@@ -356,10 +398,13 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
                   {memorialMember.totalPoints} {memorialMember.totalPoints === 1 ? 'pt' : 'pts'}
                 </span>
                 <p className="text-[11px] text-gray-200 font-mono mt-1">
-                  Overall: {memorialMember.wins}-{memorialMember.losses}
+                  Overall: {formatRecord(memorialMember.wins, memorialMember.losses, memorialMember.ties)}
+                </p>
+                <p className="text-[11px] text-gray-200 font-mono mt-0.5">
+                  Locks: {formatRecord(memorialMember.lockWins, memorialMember.lockLosses, memorialMember.lockTies)}
                 </p>
                 <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                  Wk {currentWeek}: {memorialMember.weekWins}-{memorialMember.weekLosses}, {memorialMember.weekPoints} {memorialMember.weekPoints === 1 ? 'pt' : 'pts'}
+                  Wk {currentWeek}: {formatRecord(memorialMember.weekWins, memorialMember.weekLosses, memorialMember.weekTies)}, {memorialMember.weekPoints} {memorialMember.weekPoints === 1 ? 'pt' : 'pts'}
                 </p>
               </div>
             </div>
