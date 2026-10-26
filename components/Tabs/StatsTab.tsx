@@ -21,7 +21,12 @@ interface TeamStat {
   record: string;
   picked: number;
   lotw: number;
-  maxed: number;
+  count1x: number;
+  count2x: number;
+  count3x: number;
+  count4x: number;
+  count5x: number;
+  count6x: number;
 }
 
 interface BestUser {
@@ -43,12 +48,17 @@ interface WeekStat {
   hasCompletedGames: boolean;
 }
 
-export default function StatsTab() {
+interface StatsTabProps {
+  currentWeek?: number;
+}
+
+export default function StatsTab({ currentWeek }: StatsTabProps) {
   const [subTab, setSubTab] = useState<'perfection' | 'weeks' | 'popular' | 'history'>('popular');
   const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
   const [perfectionData, setPerfectionData] = useState<any[]>([]);
   const [shameData, setShameData] = useState<any[]>([]);
   const [weeksData, setWeeksData] = useState<WeekStat[]>([]);
+  const [activeWeekNum, setActiveWeekNum] = useState<number>(currentWeek || 1);
   const [loading, setLoading] = useState(true);
 
   // Sorting state for Popular subtab
@@ -57,7 +67,7 @@ export default function StatsTab() {
 
   useEffect(() => {
     fetchStats();
-  }, [subTab]);
+  }, [subTab, currentWeek]);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -68,14 +78,29 @@ export default function StatsTab() {
 
     const { data: games } = await supabase
       .from('games')
-      .select('*');
+      .select('*')
+      .order('kickoff_time', { ascending: false });
+
+    // Determine current active week if not passed as a prop
+    let activeW = currentWeek;
+    if (!activeW) {
+      const uncompletedGames = (games || [])
+        .filter((g) => g.status !== 'post')
+        .sort((a, b) => a.week - b.week);
+      activeW = uncompletedGames.length > 0 ? uncompletedGames[0].week : 1;
+    }
+    setActiveWeekNum(activeW);
 
     // 1. Calculate stats for COMPLETED GAMES ONLY (status === 'post')
     const completedPicks = (picks || []).filter((p) => p.games && p.games.status === 'post');
 
-    const teamCounts: Record<string, { picked: number; lotw: number; maxed: number }> = {};
+    const teamCounts: Record<
+      string,
+      { picked: number; lotw: number; c1: number; c2: number; c3: number; c4: number; c5: number; c6: number }
+    > = {};
+
     ALL_NFL_TEAMS.forEach((t) => {
-      teamCounts[t] = { picked: 0, lotw: 0, maxed: 0 };
+      teamCounts[t] = { picked: 0, lotw: 0, c1: 0, c2: 0, c3: 0, c4: 0, c5: 0, c6: 0 };
     });
 
     const userTeamUsage: Record<string, Record<string, number>> = {};
@@ -91,18 +116,28 @@ export default function StatsTab() {
       userTeamUsage[p.user_id][team] = (userTeamUsage[p.user_id][team] || 0) + 1;
     });
 
+    // Compute distribution counts (1x through 6x)
     Object.values(userTeamUsage).forEach((userMap) => {
       Object.entries(userMap).forEach(([team, count]) => {
-        if (count >= 6 && teamCounts[team]) {
-          teamCounts[team].maxed += 1;
-        }
+        if (!teamCounts[team]) return;
+        if (count === 1) teamCounts[team].c1 += 1;
+        else if (count === 2) teamCounts[team].c2 += 1;
+        else if (count === 3) teamCounts[team].c3 += 1;
+        else if (count === 4) teamCounts[team].c4 += 1;
+        else if (count === 5) teamCounts[team].c5 += 1;
+        else if (count >= 6) teamCounts[team].c6 += 1;
       });
     });
 
+    // Get the MOST RECENT record for each team across all scheduled games
     const teamRecordMap: Record<string, string> = {};
     (games || []).forEach((g) => {
-      if (g.home_team && g.home_record) teamRecordMap[g.home_team] = g.home_record;
-      if (g.away_team && g.away_record) teamRecordMap[g.away_team] = g.away_record;
+      if (g.home_team && g.home_record && !teamRecordMap[g.home_team]) {
+        teamRecordMap[g.home_team] = g.home_record;
+      }
+      if (g.away_team && g.away_record && !teamRecordMap[g.away_team]) {
+        teamRecordMap[g.away_team] = g.away_record;
+      }
     });
 
     const popularList: TeamStat[] = ALL_NFL_TEAMS.map((team) => ({
@@ -111,7 +146,12 @@ export default function StatsTab() {
       record: teamRecordMap[team] || '0-0',
       picked: teamCounts[team].picked,
       lotw: teamCounts[team].lotw,
-      maxed: teamCounts[team].maxed,
+      count1x: teamCounts[team].c1,
+      count2x: teamCounts[team].c2,
+      count3x: teamCounts[team].c3,
+      count4x: teamCounts[team].c4,
+      count5x: teamCounts[team].c5,
+      count6x: teamCounts[team].c6,
     }));
 
     setTeamStats(popularList);
@@ -171,10 +211,11 @@ export default function StatsTab() {
     setPerfectionData(perfList.sort((a, b) => a.week - b.week));
     setShameData(zeroList.sort((a, b) => a.week - b.week));
 
-    // 3. Weeks Calculations (Weeks 1 to 18)
+    // 3. Weeks Calculations: Active Week down to Week 1
     const weeksList: WeekStat[] = [];
+    const maxWeek = Math.min(18, Math.max(1, activeW));
 
-    for (let wk = 1; wk <= 18; wk++) {
+    for (let wk = maxWeek; wk >= 1; wk--) {
       const wkPicks = completedPicks.filter((p) => p.week === wk);
 
       if (wkPicks.length === 0) {
@@ -348,78 +389,114 @@ export default function StatsTab() {
         </div>
       ) : subTab === 'popular' ? (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
-          <table className="w-full text-left border-collapse table-fixed">
-            <thead>
-              <tr className="border-b border-gray-800 text-[11px] font-bold text-gray-400 bg-gray-900/50">
-                <th
-                  className="py-3 px-4 w-[38%] cursor-pointer whitespace-nowrap select-none"
-                  onClick={() => handleSortPopular('nick')}
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Team</span>
-                    {popularSortKey === 'nick' && (
-                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="py-3 px-2 text-center w-[20%] cursor-pointer whitespace-nowrap select-none"
-                  onClick={() => handleSortPopular('picked')}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Picked</span>
-                    {popularSortKey === 'picked' && (
-                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="py-3 px-2 text-center w-[21%] cursor-pointer whitespace-nowrap select-none"
-                  onClick={() => handleSortPopular('lotw')}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>LOTW</span>
-                    {popularSortKey === 'lotw' && (
-                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-                <th
-                  className="py-3 px-2 text-center w-[21%] cursor-pointer whitespace-nowrap select-none"
-                  onClick={() => handleSortPopular('maxed')}
-                >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Maxed</span>
-                    {popularSortKey === 'maxed' && (
-                      <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800/60 text-xs">
-              {sortedTeamStats.map((item) => (
-                <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
-                  <td className="py-3 px-4 font-bold text-white flex items-center gap-2 min-w-0">
-                    <img src={getTeamLogoUrl(item.team)} alt="" className="w-6 h-6 object-contain flex-shrink-0" />
-                    <div className="flex flex-col truncate min-w-0">
-                      <span className="truncate">{item.nick}</span>
-                      <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse min-w-[540px]">
+              <thead>
+                {/* Top header row with grouped 'Picked' label spanning 1x through 6x */}
+                <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/80">
+                  <th
+                    rowSpan={2}
+                    className="py-2.5 px-3 w-40 min-w-[140px] sticky left-0 z-20 bg-gray-900 border-r border-gray-800 cursor-pointer select-none"
+                    onClick={() => handleSortPopular('nick')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Team</span>
+                      {popularSortKey === 'nick' && (
+                        <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
                     </div>
-                  </td>
-                  <td className="py-3 px-2 text-center font-mono font-bold text-emerald-400">
-                    {item.picked}
-                  </td>
-                  <td className="py-3 px-2 text-center font-mono font-bold text-amber-400">
-                    {item.lotw}
-                  </td>
-                  <td className="py-3 px-2 text-center font-mono font-bold text-indigo-400">
-                    {item.maxed}
-                  </td>
+                  </th>
+                  <th
+                    rowSpan={2}
+                    className="py-2.5 px-2 text-center w-14 cursor-pointer select-none border-r border-gray-800"
+                    onClick={() => handleSortPopular('picked')}
+                  >
+                    <div className="flex items-center justify-center gap-0.5">
+                      <span>Total</span>
+                      {popularSortKey === 'picked' && (
+                        <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th
+                    rowSpan={2}
+                    className="py-2.5 px-2 text-center w-14 cursor-pointer select-none border-r border-gray-800"
+                    onClick={() => handleSortPopular('lotw')}
+                  >
+                    <div className="flex items-center justify-center gap-0.5">
+                      <span>LOTW</span>
+                      {popularSortKey === 'lotw' && (
+                        <span className="text-emerald-400 font-bold">{popularSortOrder === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </div>
+                  </th>
+                  <th colSpan={6} className="py-1 px-1 text-center font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-950/20">
+                    Picked
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+
+                {/* Sub-header row for 1x - 6x columns */}
+                <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/60">
+                  {(['count1x', 'count2x', 'count3x', 'count4x', 'count5x', 'count6x'] as (keyof TeamStat)[]).map(
+                    (colKey, idx) => (
+                      <th
+                        key={colKey}
+                        className="py-1.5 px-2 text-center w-11 cursor-pointer select-none hover:text-white"
+                        onClick={() => handleSortPopular(colKey)}
+                      >
+                        <div className="flex items-center justify-center gap-0.5">
+                          <span>{idx + 1}x</span>
+                          {popularSortKey === colKey && (
+                            <span className="text-emerald-400 font-bold text-[9px]">
+                              {popularSortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </div>
+                      </th>
+                    )
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-800/60 text-xs">
+                {sortedTeamStats.map((item) => (
+                  <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
+                    {/* Sticky pinned team column */}
+                    <td className="py-2.5 px-3 font-bold text-white flex items-center gap-2 min-w-[140px] sticky left-0 z-10 bg-gray-900 border-r border-gray-800">
+                      <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                      <div className="flex flex-col truncate min-w-0">
+                        <span className="truncate text-xs">{item.nick}</span>
+                        <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-emerald-400 border-r border-gray-800/50">
+                      {item.picked}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-amber-400 border-r border-gray-800/50">
+                      {item.lotw}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                      {item.count1x || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                      {item.count2x || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                      {item.count3x || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                      {item.count4x || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                      {item.count5x || '-'}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-indigo-400">
+                      {item.count6x || '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : subTab === 'perfection' ? (
         <div className="flex flex-col gap-4">
@@ -504,8 +581,9 @@ export default function StatsTab() {
                       </div>
                     </div>
 
+                    {/* Removed ' • 0 pts' from Hall of Poop */}
                     <span className="text-xs font-mono font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/30">
-                      Week {item.week} • {item.points} pts
+                      Week {item.week}
                     </span>
                   </div>
                 ))}
@@ -533,7 +611,7 @@ export default function StatsTab() {
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex justify-between items-start">
                   <div>
-                    {/* W-L (.###) as the top line */}
+                    {/* W-L (.###) as top line */}
                     <h4 className="font-bold text-xs font-mono text-white">
                       {wItem.leagueWins}-{wItem.leagueLosses}{' '}
                       <span className="text-gray-400 font-normal">({wItem.winPctStr})</span>
