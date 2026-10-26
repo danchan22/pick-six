@@ -270,7 +270,7 @@ export default function Home() {
           ) : activeTab === 'leaderboard' ? (
             <LeaderboardTab currentWeek={currentWeek} />
           ) : activeTab === 'stats' ? (
-            <StatsTab urrentWeek={currentWeek} />
+            <StatsTab currentWeek={currentWeek} />
           ) : activeTab === 'rules' ? (
             <RulesTab />
           ) : (
