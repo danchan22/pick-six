@@ -390,12 +390,12 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
       ) : subTab === 'popular' ? (
         <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-xl">
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[540px]">
+            <table className="w-full text-left border-separate border-spacing-0 min-w-[540px]">
               <thead>
-                <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/80">
+                <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900">
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-3 w-40 min-w-[140px] sticky left-0 z-20 bg-gray-900 border-r border-gray-800 cursor-pointer select-none"
+                    className="py-2.5 px-3 w-40 min-w-[140px] sticky left-0 z-30 bg-gray-900 border-r border-b border-gray-800 cursor-pointer select-none"
                     onClick={() => handleSortPopular('nick')}
                   >
                     <div className="flex items-center gap-1">
@@ -407,7 +407,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                   </th>
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-2 text-center w-14 cursor-pointer select-none border-r border-gray-800"
+                    className="py-2.5 px-2 text-center w-14 cursor-pointer select-none border-r border-b border-gray-800 bg-gray-900"
                     onClick={() => handleSortPopular('picked')}
                   >
                     <div className="flex items-center justify-center gap-0.5">
@@ -419,7 +419,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                   </th>
                   <th
                     rowSpan={2}
-                    className="py-2.5 px-2 text-center w-14 cursor-pointer select-none border-r border-gray-800"
+                    className="py-2.5 px-2 text-center w-14 cursor-pointer select-none border-r border-b border-gray-800 bg-gray-900"
                     onClick={() => handleSortPopular('lotw')}
                   >
                     <div className="flex items-center justify-center gap-0.5">
@@ -429,17 +429,17 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                       )}
                     </div>
                   </th>
-                  <th colSpan={6} className="py-1 px-1 text-center font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-950/20">
+                  <th colSpan={6} className="py-1 px-1 text-center font-extrabold uppercase tracking-widest text-emerald-400 bg-emerald-950/40 border-b border-gray-800">
                     Picked
                   </th>
                 </tr>
 
-                <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/60">
+                <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/90">
                   {(['count1x', 'count2x', 'count3x', 'count4x', 'count5x', 'count6x'] as (keyof TeamStat)[]).map(
                     (colKey, idx) => (
                       <th
                         key={colKey}
-                        className="py-1.5 px-2 text-center w-11 cursor-pointer select-none hover:text-white"
+                        className="py-1.5 px-2 text-center w-11 cursor-pointer select-none hover:text-white border-b border-gray-800"
                         onClick={() => handleSortPopular(colKey)}
                       >
                         <div className="flex items-center justify-center gap-0.5">
@@ -455,38 +455,41 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800/60 text-xs">
+              <tbody className="text-xs">
                 {sortedTeamStats.map((item) => (
                   <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
-                    <td className="py-2.5 px-3 font-bold text-white flex items-center gap-2 min-w-[140px] sticky left-0 z-10 bg-gray-900 border-r border-gray-800">
-                      <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
-                      <div className="flex flex-col truncate min-w-0">
-                        <span className="truncate text-xs">{item.nick}</span>
-                        <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+                    {/* Fixed pinned cell: removed flex on <td> and wrapped contents in inner flex <div> */}
+                    <td className="py-2.5 px-3 min-w-[140px] sticky left-0 z-20 bg-gray-900 border-r border-b border-gray-800/60">
+                      <div className="flex items-center gap-2">
+                        <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
+                        <div className="flex flex-col truncate min-w-0">
+                          <span className="truncate text-xs font-bold text-white">{item.nick}</span>
+                          <span className="text-[10px] font-mono text-gray-400 font-normal">({item.record})</span>
+                        </div>
                       </div>
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono font-bold text-emerald-400 border-r border-gray-800/50">
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-emerald-400 border-r border-b border-gray-800/60 bg-gray-900/40">
                       {item.picked}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono font-bold text-amber-400 border-r border-gray-800/50">
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-amber-400 border-r border-b border-gray-800/60 bg-gray-900/40">
                       {item.lotw}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300 border-b border-gray-800/60">
                       {item.count1x || '-'}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300 border-b border-gray-800/60">
                       {item.count2x || '-'}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300 border-b border-gray-800/60">
                       {item.count3x || '-'}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300 border-b border-gray-800/60">
                       {item.count4x || '-'}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono text-gray-300">
+                    <td className="py-2.5 px-2 text-center font-mono text-gray-300 border-b border-gray-800/60">
                       {item.count5x || '-'}
                     </td>
-                    <td className="py-2.5 px-2 text-center font-mono font-bold text-indigo-400">
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-indigo-400 border-b border-gray-800/60">
                       {item.count6x || '-'}
                     </td>
                   </tr>
