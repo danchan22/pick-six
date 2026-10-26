@@ -81,9 +81,9 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
       .select('*')
       .order('kickoff_time', { ascending: false });
 
-    // Determine current active week if not passed as a prop
-    let activeW = currentWeek;
-    if (!activeW) {
+    // Determine current active week safely as a number
+    let activeW: number = currentWeek ?? 1;
+    if (!currentWeek) {
       const uncompletedGames = (games || [])
         .filter((g) => g.status !== 'post')
         .sort((a, b) => a.week - b.week);
@@ -392,7 +392,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[540px]">
               <thead>
-                {/* Top header row with grouped 'Picked' label spanning 1x through 6x */}
                 <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/80">
                   <th
                     rowSpan={2}
@@ -435,7 +434,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                   </th>
                 </tr>
 
-                {/* Sub-header row for 1x - 6x columns */}
                 <tr className="border-b border-gray-800 text-[10px] font-bold text-gray-400 bg-gray-900/60">
                   {(['count1x', 'count2x', 'count3x', 'count4x', 'count5x', 'count6x'] as (keyof TeamStat)[]).map(
                     (colKey, idx) => (
@@ -460,7 +458,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
               <tbody className="divide-y divide-gray-800/60 text-xs">
                 {sortedTeamStats.map((item) => (
                   <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
-                    {/* Sticky pinned team column */}
                     <td className="py-2.5 px-3 font-bold text-white flex items-center gap-2 min-w-[140px] sticky left-0 z-10 bg-gray-900 border-r border-gray-800">
                       <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
                       <div className="flex flex-col truncate min-w-0">
@@ -581,7 +578,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                       </div>
                     </div>
 
-                    {/* Removed ' • 0 pts' from Hall of Poop */}
                     <span className="text-xs font-mono font-bold text-red-400 bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/30">
                       Week {item.week}
                     </span>
@@ -603,7 +599,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
               key={wItem.week}
               className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex gap-3 items-start shadow-md"
             >
-              {/* Week number on left */}
               <span className="font-extrabold text-sm font-mono w-6 text-center text-gray-400 pt-0.5">
                 {wItem.week}
               </span>
@@ -611,12 +606,10 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
               <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <div className="flex justify-between items-start">
                   <div>
-                    {/* W-L (.###) as top line */}
                     <h4 className="font-bold text-xs font-mono text-white">
                       {wItem.leagueWins}-{wItem.leagueLosses}{' '}
                       <span className="text-gray-400 font-normal">({wItem.winPctStr})</span>
                     </h4>
-                    {/* Smaller Locks line below */}
                     {wItem.week !== 18 && (
                       <p className="text-[10px] font-mono text-gray-400 mt-0.5">
                         Locks: <span className="text-gray-200 font-medium">{wItem.lockWins}-{wItem.lockLosses}</span>
@@ -630,7 +623,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                   </div>
                 </div>
 
-                {/* Best record section */}
                 {wItem.bestUsers.length > 0 && (
                   <div className="border-t border-gray-800/80 pt-2 flex flex-col gap-1">
                     <span className="text-[10px] font-bold text-amber-400/90 uppercase tracking-wider">
