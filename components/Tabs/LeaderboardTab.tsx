@@ -52,6 +52,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [memberPicks, setMemberPicks] = useState<any[]>([]);
+  const [displayWeek, setDisplayWeek] = useState<number>(currentWeek);
   const [viewWeek, setViewWeek] = useState<number>(currentWeek);
 
   useEffect(() => {
@@ -60,10 +61,8 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
     });
   }, []);
 
-  // Fetch leaderboard data when currentWeek changes
   useEffect(() => {
     fetchLeaderboard();
-    setViewWeek(currentWeek);
   }, [currentWeek]);
 
   useEffect(() => {
@@ -73,8 +72,38 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
   const fetchLeaderboard = async () => {
     const { data: profiles } = await supabase.from('profiles').select('*');
     const { data: picks } = await supabase.from('picks').select('*, games(*)');
+    const { data: games } = await supabase.from('games').select('*').order('kickoff_time', { ascending: true });
 
     if (!profiles) return;
+
+    // Determine the week that should be displayed on standings cards
+    let effectiveWeek = currentWeek;
+
+    if (currentWeek > 1 && games && games.length > 0) {
+      // Find the first game of currentWeek
+      const currentWeekGames = games.filter((g) => g.week === currentWeek);
+      if (currentWeekGames.length > 0) {
+        const firstKickoff = new Date(currentWeekGames[0].kickoff_time);
+        
+        // Find Thursday 00:00:00 of the week that contains the first game
+        const thursdayCutoff = new Date(firstKickoff);
+        const dayOfWeek = thursdayCutoff.getDay(); // 0: Sun, 1: Mon, ... 4: Thu
+        const diffToThursday = (4 - dayOfWeek + 7) % 7;
+        
+        // Back up to Thursday of the matchup cycle
+        thursdayCutoff.setDate(firstKickoff.getDate() - (dayOfWeek >= 4 ? dayOfWeek - 4 : dayOfWeek + 3));
+        thursdayCutoff.setHours(0, 0, 0, 0);
+
+        const now = new Date();
+        // If today has not yet reached Thursday of currentWeek, display previous week
+        if (now < thursdayCutoff) {
+          effectiveWeek = Math.max(1, currentWeek - 1);
+        }
+      }
+    }
+
+    setDisplayWeek(effectiveWeek);
+    setViewWeek(effectiveWeek);
 
     const computed = profiles.map((p) => {
       const userPicks = (picks || []).filter((pick) => pick.user_id === p.id);
@@ -125,8 +154,8 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
           pick.games?.winner_team !== 'TIE'
       ).length;
 
-      // --- Current Week Calculations ---
-      const weekPicks = userPicks.filter((pick) => pick.week === currentWeek);
+      // --- Effective Standings Week Calculations ---
+      const weekPicks = userPicks.filter((pick) => pick.week === effectiveWeek);
       const weekPoints = weekPicks.reduce((acc, curr) => {
         const game = curr.games;
         if (game?.status === 'post') {
@@ -171,7 +200,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
       };
     });
 
-    // Check for Philly Rick / Rick Chancellor memorial card
+    // Check for Philly Rick memorial card
     const memorial = computed.find(
       (p) =>
         p.team_name?.toLowerCase().includes('philly rick') ||
@@ -180,7 +209,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
 
     setMemorialMember(memorial || null);
 
-    // Active profiles (excluding Philly Rick)
+    // Active profiles
     const activeProfiles = computed.filter(
       (p) =>
         !p.team_name?.toLowerCase().includes('philly rick') &&
@@ -239,7 +268,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
 
   const handleOpenMemberModal = (user: any) => {
     setSelectedMember(user);
-    setViewWeek(currentWeek || 1);
+    setViewWeek(displayWeek);
   };
 
   return (
@@ -336,7 +365,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
                   </p>
 
                   <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    Wk {currentWeek}: {formatRecord(user.weekWins, user.weekLosses, user.weekTies)}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
+                    Wk {displayWeek}: {formatRecord(user.weekWins, user.weekLosses, user.weekTies)}, {user.weekPoints} {user.weekPoints === 1 ? 'pt' : 'pts'}
                   </p>
                 </div>
               </div>
@@ -404,7 +433,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
                   Locks: {formatRecord(memorialMember.lockWins, memorialMember.lockLosses, memorialMember.lockTies)}
                 </p>
                 <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                  Wk {currentWeek}: {formatRecord(memorialMember.weekWins, memorialMember.weekLosses, memorialMember.weekTies)}, {memorialMember.weekPoints} {memorialMember.weekPoints === 1 ? 'pt' : 'pts'}
+                  Wk {displayWeek}: {formatRecord(memorialMember.weekWins, memorialMember.weekLosses, memorialMember.weekTies)}, {memorialMember.weekPoints} {memorialMember.weekPoints === 1 ? 'pt' : 'pts'}
                 </p>
               </div>
             </div>
