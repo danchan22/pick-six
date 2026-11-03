@@ -604,7 +604,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
         /* Subtab 3: Locked (6x Picked Teams) */
         <div className="flex flex-col gap-3">
           <p className="text-xs text-gray-400 px-1 font-medium">
-            Teams picked the maximum 6 times by league members
+            Teams picked the maximum 6 times (and their records in those picks)
           </p>
 
           {lockedUsersData.length === 0 ? (
