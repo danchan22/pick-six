@@ -642,7 +642,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
                     </div>
 
                     <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-500/40 px-2 py-0.5 rounded-lg">
-                      {user.lockedTeams.length} {user.lockedTeams.length === 1 ? 'team' : 'teams'} locked
+                      {user.lockedTeams.length} {user.lockedTeams.length === 1 ? 'team' : 'teams'}
                     </span>
                   </div>
 
