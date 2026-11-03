@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { getTeamNickname, getTeamLogoUrl, getTeamAbbr } from '@/lib/nflTeams';
 
@@ -47,8 +47,9 @@ function formatRecord(wins: number, losses: number, ties: number = 0): string {
 }
 
 export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps) {
-  const [activeStandings, setActiveStandings] = useState<any[]>([]);
+  const [activeProfilesRaw, setActiveProfilesRaw] = useState<any[]>([]);
   const [memorialMember, setMemorialMember] = useState<any | null>(null);
+  const [sortBy, setSortBy] = useState<'points' | 'record' | 'locks'>('points');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedMember, setSelectedMember] = useState<any | null>(null);
   const [memberPicks, setMemberPicks] = useState<any[]>([]);
@@ -80,17 +81,13 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
     let effectiveWeek = currentWeek;
 
     if (currentWeek > 1 && games && games.length > 0) {
-      // Find the first game of currentWeek
       const currentWeekGames = games.filter((g) => g.week === currentWeek);
       if (currentWeekGames.length > 0) {
         const firstKickoff = new Date(currentWeekGames[0].kickoff_time);
         
-        // Find Thursday 00:00:00 of the week that contains the first game
+        // Find Thursday 00:00:00 of the week containing the first kickoff
         const thursdayCutoff = new Date(firstKickoff);
         const dayOfWeek = thursdayCutoff.getDay(); // 0: Sun, 1: Mon, ... 4: Thu
-        const diffToThursday = (4 - dayOfWeek + 7) % 7;
-        
-        // Back up to Thursday of the matchup cycle
         thursdayCutoff.setDate(firstKickoff.getDate() - (dayOfWeek >= 4 ? dayOfWeek - 4 : dayOfWeek + 3));
         thursdayCutoff.setHours(0, 0, 0, 0);
 
@@ -140,6 +137,9 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
           pick.games?.winner_team !== 'TIE'
       ).length;
 
+      const totalOverallGames = wins + losses + ties;
+      const overallWinPct = totalOverallGames > 0 ? (wins + 0.5 * ties) / totalOverallGames : 0;
+
       // --- Locks Calculations ---
       const lockPicks = completedPicks.filter((pick) => pick.is_lock);
       const lockWins = lockPicks.filter(
@@ -153,6 +153,9 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
           pick.selected_team !== pick.games?.winner_team &&
           pick.games?.winner_team !== 'TIE'
       ).length;
+
+      const totalLockGames = lockWins + lockLosses + lockTies;
+      const lockWinPct = totalLockGames > 0 ? (lockWins + 0.5 * lockTies) / totalLockGames : 0;
 
       // --- Effective Standings Week Calculations ---
       const weekPicks = userPicks.filter((pick) => pick.week === effectiveWeek);
@@ -190,9 +193,11 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
         wins,
         losses,
         ties,
+        overallWinPct,
         lockWins,
         lockLosses,
         lockTies,
+        lockWinPct,
         weekPoints,
         weekWins,
         weekLosses,
@@ -216,19 +221,40 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
         !(p.first_name?.toLowerCase() === 'rick' && p.last_name?.toLowerCase() === 'chancellor')
     );
 
-    activeProfiles.sort((a, b) => b.totalPoints - a.totalPoints || b.wins - a.wins);
+    setActiveProfilesRaw(activeProfiles);
+  };
+
+  // Dynamically sort and rank active members
+  const activeStandings = useMemo(() => {
+    const list = [...activeProfilesRaw];
+
+    if (sortBy === 'points') {
+      list.sort((a, b) => b.totalPoints - a.totalPoints || b.wins - a.wins);
+    } else if (sortBy === 'record') {
+      list.sort((a, b) => b.overallWinPct - a.overallWinPct || b.wins - a.wins || b.totalPoints - a.totalPoints);
+    } else if (sortBy === 'locks') {
+      list.sort((a, b) => b.lockWinPct - a.lockWinPct || b.lockWins - a.lockWins || b.totalPoints - a.totalPoints);
+    }
 
     let currentRank = 1;
-    const rankedStandings = activeProfiles.map((user, index, arr) => {
+    return list.map((user, index, arr) => {
+      let isTie = false;
       if (index > 0) {
-        const prevUser = arr[index - 1];
-        if (user.totalPoints < prevUser.totalPoints) {
+        const prev = arr[index - 1];
+        if (sortBy === 'points') {
+          isTie = user.totalPoints === prev.totalPoints;
+        } else if (sortBy === 'record') {
+          isTie = user.overallWinPct === prev.overallWinPct;
+        } else if (sortBy === 'locks') {
+          isTie = user.lockWinPct === prev.lockWinPct;
+        }
+
+        if (!isTie) {
           currentRank = index + 1;
         }
       }
 
-      const isFirstOfTie =
-        index === 0 || user.totalPoints !== arr[index - 1].totalPoints;
+      const isFirstOfTie = index === 0 || !isTie;
 
       return {
         ...user,
@@ -237,9 +263,7 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
         isFirstPlace: currentRank === 1,
       };
     });
-
-    setActiveStandings(rankedStandings);
-  };
+  }, [activeProfilesRaw, sortBy]);
 
   const fetchMemberPicks = async (userId: string, week: number) => {
     const { data } = await supabase
@@ -272,10 +296,43 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
-      <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
+    <div className="flex flex-col gap-3 pb-24 max-w-2xl mx-auto px-4 pt-4 text-white">
+      {/* Header & Sort Selector */}
+      <div className="flex flex-col gap-1.5">
+        <h2 className="text-xl font-bold flex items-center gap-2">League Standings</h2>
+        
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium select-none">
+          <span className="text-gray-400">Sort by:</span>
+          <button
+            onClick={() => setSortBy('points')}
+            className={`transition-colors font-bold ${
+              sortBy === 'points' ? 'text-emerald-400 underline underline-offset-4' : 'hover:text-white'
+            }`}
+          >
+            Points
+          </button>
+          <span>•</span>
+          <button
+            onClick={() => setSortBy('record')}
+            className={`transition-colors font-bold ${
+              sortBy === 'record' ? 'text-emerald-400 underline underline-offset-4' : 'hover:text-white'
+            }`}
+          >
+            W-L Record
+          </button>
+          <span>•</span>
+          <button
+            onClick={() => setSortBy('locks')}
+            className={`transition-colors font-bold ${
+              sortBy === 'locks' ? 'text-emerald-400 underline underline-offset-4' : 'hover:text-white'
+            }`}
+          >
+            Locks
+          </button>
+        </div>
+      </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 mt-1">
         {activeStandings.map((user, index) => {
           const isCurrentUser = user.id === currentUserId;
           const initials = `${user.first_name?.slice(0, 1) || ''}${
