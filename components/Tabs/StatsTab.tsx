@@ -48,16 +48,32 @@ interface WeekStat {
   hasCompletedGames: boolean;
 }
 
+interface LockedTeamInfo {
+  team: string;
+  nick: string;
+  recordStr: string;
+}
+
+interface LockedUserStat {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  teamName: string;
+  avatarUrl?: string;
+  lockedTeams: LockedTeamInfo[];
+}
+
 interface StatsTabProps {
   currentWeek?: number;
 }
 
 export default function StatsTab({ currentWeek }: StatsTabProps) {
-  const [subTab, setSubTab] = useState<'perfection' | 'weeks' | 'popular' | 'history'>('popular');
+  const [subTab, setSubTab] = useState<'perfection' | 'weeks' | 'locked' | 'popular' | 'history'>('popular');
   const [teamStats, setTeamStats] = useState<TeamStat[]>([]);
   const [perfectionData, setPerfectionData] = useState<any[]>([]);
   const [shameData, setShameData] = useState<any[]>([]);
   const [weeksData, setWeeksData] = useState<WeekStat[]>([]);
+  const [lockedUsersData, setLockedUsersData] = useState<LockedUserStat[]>([]);
   const [activeWeekNum, setActiveWeekNum] = useState<number>(currentWeek || 1);
   const [loading, setLoading] = useState(true);
 
@@ -104,6 +120,10 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
     });
 
     const userTeamUsage: Record<string, Record<string, number>> = {};
+    const userTeamRecordTracker: Record<
+      string,
+      Record<string, { wins: number; losses: number; ties: number; total: number; profile: any }>
+    > = {};
 
     completedPicks.forEach((p) => {
       const team = p.selected_team;
@@ -114,6 +134,30 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
 
       if (!userTeamUsage[p.user_id]) userTeamUsage[p.user_id] = {};
       userTeamUsage[p.user_id][team] = (userTeamUsage[p.user_id][team] || 0) + 1;
+
+      // Track individual user performance with each team
+      if (!userTeamRecordTracker[p.user_id]) userTeamRecordTracker[p.user_id] = {};
+      if (!userTeamRecordTracker[p.user_id][team]) {
+        userTeamRecordTracker[p.user_id][team] = {
+          wins: 0,
+          losses: 0,
+          ties: 0,
+          total: 0,
+          profile: p.profiles,
+        };
+      }
+
+      userTeamRecordTracker[p.user_id][team].total += 1;
+      const isWin = p.games?.winner_team === team;
+      const isTie = p.games?.winner_team === 'TIE';
+
+      if (isWin) {
+        userTeamRecordTracker[p.user_id][team].wins += 1;
+      } else if (isTie) {
+        userTeamRecordTracker[p.user_id][team].ties += 1;
+      } else {
+        userTeamRecordTracker[p.user_id][team].losses += 1;
+      }
     });
 
     // Compute distribution counts (1x through 6x)
@@ -128,6 +172,57 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
         else if (count >= 6) teamCounts[team].c6 += 1;
       });
     });
+
+    // Build the "Locked" tab dataset (teams picked 6+ times per user)
+    const lockedUsersList: LockedUserStat[] = [];
+
+    Object.entries(userTeamRecordTracker).forEach(([userId, teamMap]) => {
+      const qualifyingTeams: LockedTeamInfo[] = [];
+      let userProfile: any = null;
+
+      Object.entries(teamMap).forEach(([team, stat]) => {
+        if (!userProfile && stat.profile) {
+          userProfile = stat.profile;
+        }
+
+        if (stat.total >= 6) {
+          const recordStr = stat.ties > 0 
+            ? `${stat.wins}-${stat.losses}-${stat.ties}` 
+            : `${stat.wins}-${stat.losses}`;
+
+          qualifyingTeams.push({
+            team,
+            nick: getTeamNickname(team),
+            recordStr,
+          });
+        }
+      });
+
+      if (qualifyingTeams.length > 0) {
+        qualifyingTeams.sort((a, b) => a.nick.localeCompare(b.nick));
+
+        const fn = userProfile?.first_name?.trim() || '';
+        const ln = userProfile?.last_name?.trim() || '';
+
+        lockedUsersList.push({
+          userId,
+          firstName: fn,
+          lastName: ln,
+          teamName: userProfile?.team_name || 'Unknown',
+          avatarUrl: userProfile?.avatar_url,
+          lockedTeams: qualifyingTeams,
+        });
+      }
+    });
+
+    // Sort locked users alphabetically by first name
+    lockedUsersList.sort((a, b) => {
+      const nameA = a.firstName || a.teamName;
+      const nameB = b.firstName || b.teamName;
+      return nameA.localeCompare(nameB);
+    });
+
+    setLockedUsersData(lockedUsersList);
 
     // Get the MOST RECENT record for each team across all scheduled games
     const teamRecordMap: Record<string, string> = {};
@@ -348,10 +443,10 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
   return (
     <div className="flex flex-col gap-4 pb-28 max-w-2xl mx-auto px-4 pt-4 text-white">
       {/* Subtab Navigator */}
-      <div className="flex justify-center gap-1.5 bg-gray-900 p-1.5 rounded-xl border border-gray-800">
+      <div className="flex justify-center gap-1.5 bg-gray-900 p-1.5 rounded-xl border border-gray-800 overflow-x-auto">
         <button
           onClick={() => setSubTab('perfection')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
             subTab === 'perfection' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -359,15 +454,23 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
         </button>
         <button
           onClick={() => setSubTab('weeks')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
             subTab === 'weeks' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
           Weeks
         </button>
         <button
+          onClick={() => setSubTab('locked')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
+            subTab === 'locked' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+          }`}
+        >
+          Locked
+        </button>
+        <button
           onClick={() => setSubTab('popular')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
             subTab === 'popular' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -375,7 +478,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
         </button>
         <button
           onClick={() => setSubTab('history')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${
             subTab === 'history' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
@@ -458,7 +561,6 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
               <tbody className="text-xs">
                 {sortedTeamStats.map((item) => (
                   <tr key={item.team} className="hover:bg-gray-800/40 transition-colors">
-                    {/* Fixed pinned cell: removed flex on <td> and wrapped contents in inner flex <div> */}
                     <td className="py-2.5 px-3 min-w-[140px] sticky left-0 z-20 bg-gray-900 border-r border-b border-gray-800/60">
                       <div className="flex items-center gap-2">
                         <img src={getTeamLogoUrl(item.team)} alt="" className="w-5 h-5 object-contain flex-shrink-0" />
@@ -497,6 +599,83 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : subTab === 'locked' ? (
+        /* Subtab 3: Locked (6x Picked Teams) */
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-gray-400 px-1 font-medium">
+            Teams picked the maximum 6 times by league members
+          </p>
+
+          {lockedUsersData.length === 0 ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center flex flex-col items-center gap-2 shadow-xl">
+              <span className="text-2xl">🔒</span>
+              <p className="text-xs text-gray-400 font-medium">
+                No teams have been picked six times yet this season.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {lockedUsersData.map((user) => (
+                <div
+                  key={user.userId}
+                  className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex flex-col gap-2 shadow-md"
+                >
+                  {/* Top Line: First and Last Name */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-emerald-950/60 border border-emerald-500/50 flex items-center justify-center font-bold text-[11px] text-emerald-400 overflow-hidden">
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          `${user.firstName?.slice(0, 1) || ''}${user.lastName?.slice(0, 1) || ''}`
+                        )}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="font-bold text-xs text-white">
+                          {user.firstName} {user.lastName}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {user.teamName}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-950/40 border border-indigo-500/40 px-2 py-0.5 rounded-lg">
+                      {user.lockedTeams.length} {user.lockedTeams.length === 1 ? 'team' : 'teams'} locked
+                    </span>
+                  </div>
+
+                  {/* Subtle divider line */}
+                  <div className="border-t border-gray-800/80 my-0.5" />
+
+                  {/* List of teams picked 6 times with record */}
+                  <div className="flex flex-col gap-1.5 pt-0.5">
+                    {user.lockedTeams.map((lt) => (
+                      <div
+                        key={lt.team}
+                        className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-gray-800/40 border border-gray-800/60"
+                      >
+                        <div className="flex items-center gap-2">
+                          <img
+                            src={getTeamLogoUrl(lt.team)}
+                            alt=""
+                            className="w-5 h-5 object-contain flex-shrink-0"
+                          />
+                          <span className="font-bold text-white text-xs">
+                            {lt.nick}
+                          </span>
+                        </div>
+                        <span className="font-mono text-xs font-semibold text-gray-300">
+                          ({lt.recordStr})
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ) : subTab === 'perfection' ? (
         <div className="flex flex-col gap-4">
@@ -653,7 +832,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
           ))}
         </div>
       ) : (
-        /* Subtab 4: History */
+        /* Subtab 5: History */
         <div className="flex flex-col gap-3">
           <p className="text-xs text-gray-400">Celebrate our league&apos;s past champions.</p>
 
