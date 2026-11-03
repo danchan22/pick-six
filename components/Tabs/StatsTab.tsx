@@ -450,7 +450,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
             subTab === 'perfection' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
-          Perfection
+          🏆/💩
         </button>
         <button
           onClick={() => setSubTab('weeks')}
@@ -466,7 +466,7 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
             subTab === 'locked' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
           }`}
         >
-          Locked
+          Maxed
         </button>
         <button
           onClick={() => setSubTab('popular')}
