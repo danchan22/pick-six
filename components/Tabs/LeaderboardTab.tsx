@@ -71,7 +71,6 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
   }, [selectedMember, viewWeek]);
 
   const fetchLeaderboard = async () => {
-    const { data: profiles } = await supabase.from('profiles').select('*');
 const { data: picks } = await supabase
   .from('picks')
   .select('*, games(*)')
