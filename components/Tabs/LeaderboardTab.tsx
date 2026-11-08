@@ -71,12 +71,15 @@ export default function LeaderboardTab({ currentWeek = 1 }: LeaderboardTabProps)
   }, [selectedMember, viewWeek]);
 
   const fetchLeaderboard = async () => {
-const { data: picks } = await supabase
-  .from('picks')
-  .select('*, games(*), profiles(*)')
-  .limit(10000);
-    
-    const { data: games } = await supabase.from('games').select('*').order('kickoff_time', { ascending: true });
+const { data: profiles } = await supabase.from('profiles').select('*');
+    const { data: picks } = await supabase
+      .from('picks')
+      .select('*, games(*)')
+      .limit(10000);
+    const { data: games } = await supabase
+      .from('games')
+      .select('*')
+      .order('kickoff_time', { ascending: true });
 
     if (!profiles) return;
 
