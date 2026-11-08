@@ -88,10 +88,10 @@ export default function StatsTab({ currentWeek }: StatsTabProps) {
   const fetchStats = async () => {
     setLoading(true);
 
-    const { data: picks } = await supabase
-      .from('picks')
-      .select('*, games(*), profiles(*)');
-    .limit(10000); // Prevents Supabase 1,000-row cutoff
+const { data: picks } = await supabase
+  .from('picks')
+  .select('*, games(*), profiles(*)')
+  .limit(10000);
 
     const { data: games } = await supabase
       .from('games')
